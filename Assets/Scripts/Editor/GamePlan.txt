@@ -1,0 +1,2 @@
+﻿1. Add support for multiple trees at multiple texture levels.
+2. Add support for overlaying mazes for trees, water, and a path
