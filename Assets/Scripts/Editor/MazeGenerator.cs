@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using UnityEditor;
 using System.IO;
+using System.Collections.Generic;
 
 public class MazeGenerator : EditorWindow
 {
@@ -676,4 +677,189 @@ public class MazeGenerator : EditorWindow
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
     }
+	/*
+	void createStraight()
+	{
+		TerrainData terrainData = new TerrainData();
+		string name = "Straight";
+		terrainData.baseMapResolution = baseTextureResolution;
+		terrainData.heightmapResolution = heightmapResolution;
+		terrainData.alphamapResolution = heightmapResolution;
+		terrainData.SetDetailResolution(detailResolution, detailResolutionPerPatch);
+
+		// Save asset to database to avoid a bug
+		if (!Directory.Exists(Application.dataPath + saveLocation + "/TerrainData"))
+		{
+			Directory.CreateDirectory(Application.dataPath + saveLocation + "/TerrainData");
+		}
+		AssetDatabase.CreateAsset(terrainData, "Assets/" + saveLocation + "TerrainData/" + name + ".asset");
+		AssetDatabase.SaveAssets();
+		terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath("Assets/" + saveLocation + "TerrainData/Straight.asset", typeof(TerrainData));
+
+		// Texture the terrain 
+		if (isTextured)
+		{
+			SplatPrototype[] splat = new SplatPrototype[texturesList.Length];
+			for (int i = 0; i < texturesList.Length && texturesList[i] != null; i++)
+			{
+				splat[i] = new SplatPrototype();
+				splat[i].texture = textureList[i];
+			}
+			terrainData.splatPrototypes = splat;
+
+			float[,,] splatmapData = new float[terrainData.alphamapWidth, terrainData.alphamapHeight, terrainData.alphamapLayers];
+
+			Vector2 startPoint = new Vector2(0, Random.Range(pathWidth, tileHeight - pathWidth));
+			Vector2 endPoint = new Vector2(tileWidth, Random.Range(pathWidth, tileHeight - pathWidth));
+			Vector2 currentPoint = startPoint;
+
+			int numPathTextures = 0;
+			int numOtherTextures = 0;
+			for(int i = 0; i < textures.Length; i++)
+			{
+				if (textureOnPath[i]) numPathTextures++;   
+				else numOtherTextures++;
+			}
+			for (int y = 0; y < terrainData.alphamapHeight; y++)
+			{
+				for(int x = 0; x < terrainData.alphamapWidth; x++)
+				{
+					for(int i = 0; i < textures.Length; i++)
+					{
+						if (!textureOnPath[i]) splatmapData[y, x, i] = 1.0f / numOtherTextures;
+						else splatmapData[y, x, i] = 0.0f;
+					}
+				}
+			}
+
+			bool finished = false;
+			HashSet<Vector2> visitedPoints = new HashSet<Vector2>();
+			HashSet<Vector2> justVisitedPoints = new HashSet<Vector2>();
+			while (!finished)
+			{
+				float r_x = currentPoint.x / tileWidth;
+				float r_y = currentPoint.y / tileHeight;
+				float r_path_x = pathWidth / tileWidth;
+				float r_path_y = pathWidth / tileHeight;
+				for (int y = (int)Mathf.Max(new float[] { terrainData.alphamapHeight * ((r_y) - (r_path_y / 2)), 0 });
+					y < (int)Mathf.Min(new float[] { terrainData.alphamapHeight * ((r_y) + (r_path_y / 2)), terrainData.alphamapHeight });
+					y++)
+				{
+					for (int x = (int)Mathf.Max(new float[] { terrainData.alphamapWidth * ((r_x) - (r_path_x / 2)), 0 });
+						x < (int)Mathf.Min(new float[] { terrainData.alphamapWidth * ((r_x) + (r_path_x / 2)), terrainData.alphamapWidth });
+						x++)
+					{
+						justVisitedPoints.Add(new Vector2(x, y));
+						Vector2 spot = new Vector2(tileWidth * ((float)x / terrainData.alphamapWidth), tileHeight * ((float)y / terrainData.alphamapHeight));
+						float distance = Vector2.Distance(currentPoint, spot);
+						float textureMergeStart = 3.0f / 8.0f;
+						float textureMergeEnd = 1.0f / 2.0f;
+
+						if (distance < pathWidth * textureMergeStart)
+						{
+							for (int i = 0; i < textures.Length; i++)
+							{
+								if (textureOnPath[i]) splatmapData[y, x, i] = 1.0f / numPathTextures;
+								else splatmapData[y, x, i] = 0;
+							}
+						}
+						else if (distance < pathWidth * textureMergeEnd && distance >= pathWidth * textureMergeStart && !visitedPoints.Contains(new Vector2(x, y))) 
+						{
+							float normalizedDistance = (distance - pathWidth * textureMergeStart) / (textureMergeEnd - textureMergeStart);
+
+							for (int i = 0; i < textures.Length; i++)
+							{
+								if (textureOnPath[i])
+								{
+									splatmapData[y, x, i] = (1 - normalizedDistance) / numPathTextures;
+								}
+								else splatmapData[y, x, i] = (normalizedDistance) / numOtherTextures;
+							}
+						} 
+					}
+				}
+				if(currentPoint == endPoint)
+				{
+					finished = true;
+				}
+				else if(Vector2.Distance(endPoint, currentPoint) < pathWidth / 2)
+				{
+					currentPoint = endPoint;
+				}
+				else
+				{
+					float idealSlope = (endPoint.y - currentPoint.y) / (endPoint.x - currentPoint.x);
+					float minSlope = idealSlope - 5;
+					float maxSlope = idealSlope + 5;
+
+
+					Vector2 possiblePoint = Vector2.MoveTowards(currentPoint, 
+						new Vector2(currentPoint.x + 1, currentPoint.y + Random.Range(minSlope, maxSlope)),
+						pathWidth / 2);
+					int trials = 0;
+
+					while(trials < 10000 && (possiblePoint.x < pathWidth / 4 || possiblePoint.x > tileWidth - pathWidth / 4 
+						|| possiblePoint.y < pathWidth / 4 || possiblePoint.y - pathWidth / 4 > tileHeight || visitedPoints.Contains(possiblePoint)))
+					{
+						possiblePoint = Vector2.MoveTowards(currentPoint,
+							new Vector2(currentPoint.x + 1, currentPoint.y + Random.Range(minSlope, maxSlope)),
+							pathWidth / 2);
+					}
+
+					if(trials >= 10000)
+					{
+						Debug.Log("too many");
+					}
+					currentPoint = possiblePoint;
+					foreach(Vector2 x in justVisitedPoints)
+					{
+						visitedPoints.Add(x);
+					}
+				}
+			}
+
+			terrainData.SetAlphamaps(0, 0, splatmapData);
+		}
+
+		// Create the heightmap 
+		if (heightmapBasedPath)
+		{ 
+			float[,] heightMap = new float[heightmapResolution, heightmapResolution];
+
+
+			terrainData.SetHeights(0, 0, heightMap);
+		}
+
+
+
+		if (objectsBasedPath)
+		{
+			TreePrototype[] trees = new TreePrototype[1];
+			int treeCount = 0;
+			for (int o = 0; o < objectsOnPath.Length && objectsOnPath[o] != null; o++)
+			{
+				if (objectOnPathIsTree[o])
+				{
+					ArrayUtility.Add(ref trees, new TreePrototype());
+					trees[treeCount].prefab = objectsOnPath[o];
+					trees[treeCount].bendFactor = 0;                    
+					treeCount++;
+				}
+			}
+			terrainData.treePrototypes = trees;
+		}
+
+
+
+		terrainData.size = new Vector3(tileWidth, Mathf.Max(new float[] { otherHeight, pathHeight, 1 }), tileHeight);
+		terrainData.name = name;
+		GameObject terrain = Terrain.CreateTerrainGameObject(terrainData);
+
+		terrain.name = name;
+		terrain.transform.position = new Vector3(0, 0, 0);
+
+		AssetDatabase.SaveAssets();
+		AssetDatabase.Refresh();
+	}
+	*/
 }

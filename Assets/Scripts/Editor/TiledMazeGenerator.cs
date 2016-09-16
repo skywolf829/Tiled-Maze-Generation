@@ -17,8 +17,8 @@ public class TiledMazeGenerator : EditorWindow
         window = EditorWindow.GetWindow(typeof(TiledMazeGenerator));
         window.titleContent = new GUIContent("Tiled Maze Generator");
         window.minSize = new Vector2(500f, 700f);
-    }
-    
+    } 
+     
     // Editor variables
     private static EditorWindow window;
     private Vector2 scrollPosition;
@@ -52,7 +52,7 @@ public class TiledMazeGenerator : EditorWindow
 
     private float tileWidth = 10, tileHeight = 10, pathWidth = 2;
     private float pathHeight = 0, otherHeight = 5;
-    private int heightmapResolution = 129, detailResolution = 128, detailResolutionPerPatch = 8, baseTextureResolution = 1024, perTileDetail = 3;
+    private int heightmapResolution = 129, detailResolution = 128, detailResolutionPerPatch = 8, baseTextureResolution = 1024, perTileDetail = 10;
 
     private int gaussBlurRadius = 3, gaussBlurPass = 1;
 
@@ -153,7 +153,7 @@ public class TiledMazeGenerator : EditorWindow
             pathWidth = EditorGUILayout.FloatField("Path width", pathWidth);
             pathWidth = Mathf.Clamp(pathWidth, 0, Mathf.Min(new float[] { tileWidth, tileHeight }));
             perTileDetail = EditorGUILayout.IntField("Detail per tile", perTileDetail);
-            perTileDetail = Mathf.Clamp(perTileDetail, 3, 10);
+            perTileDetail = Mathf.Clamp(perTileDetail, 3, 30);
 
             if (heightmapBasedPath)
             {
@@ -301,12 +301,12 @@ public class TiledMazeGenerator : EditorWindow
             GUILayout.Label("Path were to save TerrainData:");
             saveLocation = EditorGUILayout.TextField("Assets/", saveLocation);
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Generate all tiles"))
-            {
-                GenerateTiles();
-            }
+			if (GUILayout.Button ("Generate all tiles")) {
+				//GenerateTiles();
+
+			}
             GUILayout.EndHorizontal();
-        }
+        } 
         else if (useCreatedTiles)
         {
 
@@ -316,189 +316,7 @@ public class TiledMazeGenerator : EditorWindow
         GUILayout.EndScrollView();
     }
 
-    void createStraight()
-    {
-        TerrainData terrainData = new TerrainData();
-        string name = "Straight";
-        terrainData.baseMapResolution = baseTextureResolution;
-        terrainData.heightmapResolution = heightmapResolution;
-        terrainData.alphamapResolution = heightmapResolution;
-        terrainData.SetDetailResolution(detailResolution, detailResolutionPerPatch);
-
-        // Save asset to database to avoid a bug
-        if (!Directory.Exists(Application.dataPath + saveLocation + "/TerrainData"))
-        {
-            Directory.CreateDirectory(Application.dataPath + saveLocation + "/TerrainData");
-        }
-        AssetDatabase.CreateAsset(terrainData, "Assets/" + saveLocation + "TerrainData/" + name + ".asset");
-        AssetDatabase.SaveAssets();
-        terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath("Assets/" + saveLocation + "TerrainData/Straight.asset", typeof(TerrainData));
-
-        // Texture the terrain 
-        if (textureTiles)
-        {
-            SplatPrototype[] splat = new SplatPrototype[textures.Length];
-            for (int i = 0; i < textures.Length && textures[i] != null; i++)
-            {
-                splat[i] = new SplatPrototype();
-                splat[i].texture = textures[i];
-            }
-            terrainData.splatPrototypes = splat;
-
-            float[,,] splatmapData = new float[terrainData.alphamapWidth, terrainData.alphamapHeight, terrainData.alphamapLayers];
-            
-            Vector2 startPoint = new Vector2(0, Random.Range(pathWidth, tileHeight - pathWidth));
-            Vector2 endPoint = new Vector2(tileWidth, Random.Range(pathWidth, tileHeight - pathWidth));
-            Vector2 currentPoint = startPoint;
-
-            int numPathTextures = 0;
-            int numOtherTextures = 0;
-            for(int i = 0; i < textures.Length; i++)
-            {
-                if (textureOnPath[i]) numPathTextures++;   
-                else numOtherTextures++;
-            }
-            for (int y = 0; y < terrainData.alphamapHeight; y++)
-            {
-                for(int x = 0; x < terrainData.alphamapWidth; x++)
-                {
-                    for(int i = 0; i < textures.Length; i++)
-                    {
-                        if (!textureOnPath[i]) splatmapData[y, x, i] = 1.0f / numOtherTextures;
-                        else splatmapData[y, x, i] = 0.0f;
-                    }
-                }
-            }
-
-            bool finished = false;
-            HashSet<Vector2> visitedPoints = new HashSet<Vector2>();
-            HashSet<Vector2> justVisitedPoints = new HashSet<Vector2>();
-            while (!finished)
-            {
-                float r_x = currentPoint.x / tileWidth;
-                float r_y = currentPoint.y / tileHeight;
-                float r_path_x = pathWidth / tileWidth;
-                float r_path_y = pathWidth / tileHeight;
-                for (int y = (int)Mathf.Max(new float[] { terrainData.alphamapHeight * ((r_y) - (r_path_y / 2)), 0 });
-                    y < (int)Mathf.Min(new float[] { terrainData.alphamapHeight * ((r_y) + (r_path_y / 2)), terrainData.alphamapHeight });
-                    y++)
-                {
-                    for (int x = (int)Mathf.Max(new float[] { terrainData.alphamapWidth * ((r_x) - (r_path_x / 2)), 0 });
-                    x < (int)Mathf.Min(new float[] { terrainData.alphamapWidth * ((r_x) + (r_path_x / 2)), terrainData.alphamapWidth });
-                    x++)
-                    {
-                        justVisitedPoints.Add(new Vector2(x, y));
-                        Vector2 spot = new Vector2(tileWidth * ((float)x / terrainData.alphamapWidth), tileHeight * ((float)y / terrainData.alphamapHeight));
-                        float distance = Vector2.Distance(currentPoint, spot);
-                        float textureMergeStart = 3.0f / 8.0f;
-                        float textureMergeEnd = 1.0f / 2.0f;
-
-                        if (distance < pathWidth * textureMergeStart)
-                        {
-                            for (int i = 0; i < textures.Length; i++)
-                            {
-                                if (textureOnPath[i]) splatmapData[y, x, i] = 1.0f / numPathTextures;
-                                else splatmapData[y, x, i] = 0;
-                            }
-                        }
-                        else if (distance < pathWidth * textureMergeEnd && distance >= pathWidth * textureMergeStart && !visitedPoints.Contains(new Vector2(x, y))) 
-                        {
-                            float normalizedDistance = (distance - pathWidth * textureMergeStart) / (textureMergeEnd - textureMergeStart);
-
-                            for (int i = 0; i < textures.Length; i++)
-                            {
-                                if (textureOnPath[i])
-                                {
-                                    splatmapData[y, x, i] = (1 - normalizedDistance) / numPathTextures;
-                                }
-                                else splatmapData[y, x, i] = (normalizedDistance) / numOtherTextures;
-                            }
-                        } 
-                    }
-                }
-                if(currentPoint == endPoint)
-                {
-                    finished = true;
-                }
-                else if(Vector2.Distance(endPoint, currentPoint) < pathWidth / 2)
-                {
-                    currentPoint = endPoint;
-                }
-                else
-                {
-                    float idealSlope = (endPoint.y - currentPoint.y) / (endPoint.x - currentPoint.x);
-                    float minSlope = idealSlope - 5;
-                    float maxSlope = idealSlope + 5;
-                    
-
-                    Vector2 possiblePoint = Vector2.MoveTowards(currentPoint, 
-                        new Vector2(currentPoint.x + 1, currentPoint.y + Random.Range(minSlope, maxSlope)),
-                        pathWidth / 2);
-                    int trials = 0;
-                    
-                    while(trials < 10000 && (possiblePoint.x < pathWidth / 4 || possiblePoint.x > tileWidth - pathWidth / 4 
-                        || possiblePoint.y < pathWidth / 4 || possiblePoint.y - pathWidth / 4 > tileHeight || visitedPoints.Contains(possiblePoint)))
-                    {
-                        possiblePoint = Vector2.MoveTowards(currentPoint,
-                        new Vector2(currentPoint.x + 1, currentPoint.y + Random.Range(minSlope, maxSlope)),
-                        pathWidth / 2);
-                    }
-                    
-                    if(trials >= 10000)
-                    {
-                        Debug.Log("too many");
-                    }
-                    currentPoint = possiblePoint;
-                    foreach(Vector2 x in justVisitedPoints)
-                    {
-                        visitedPoints.Add(x);
-                    }
-                }
-            }
-
-            terrainData.SetAlphamaps(0, 0, splatmapData);
-        }
-
-        // Create the heightmap 
-        if (heightmapBasedPath)
-        { 
-            float[,] heightMap = new float[heightmapResolution, heightmapResolution];
-
-
-            terrainData.SetHeights(0, 0, heightMap);
-        }
-               
-        
-
-        if (objectsBasedPath)
-        {
-            TreePrototype[] trees = new TreePrototype[1];
-            int treeCount = 0;
-            for (int o = 0; o < objectsOnPath.Length && objectsOnPath[o] != null; o++)
-            {
-                if (objectOnPathIsTree[o])
-                {
-                    ArrayUtility.Add(ref trees, new TreePrototype());
-                    trees[treeCount].prefab = objectsOnPath[o];
-                    trees[treeCount].bendFactor = 0;                    
-                    treeCount++;
-                }
-            }
-            terrainData.treePrototypes = trees;
-        }
-
-
-        
-        terrainData.size = new Vector3(tileWidth, Mathf.Max(new float[] { otherHeight, pathHeight, 1 }), tileHeight);
-        terrainData.name = name;
-        GameObject terrain = Terrain.CreateTerrainGameObject(terrainData);
-
-        terrain.name = name;
-        terrain.transform.position = new Vector3(0, 0, 0);
-
-        AssetDatabase.SaveAssets();
-        AssetDatabase.Refresh();
-    }
+    
 
     private int[,] createTilingFromEBP()
     {
@@ -927,51 +745,45 @@ public class TiledMazeGenerator : EditorWindow
             case LEFT:
                 endy = Random.Range(1, perTileDetail - 1);
                 endx = Mathf.FloorToInt((perTileDetail - 1) / 2);
-                p = GenerateRandomPath(p, LEFT, startx, starty, endx, endy);
-
-
+                p = GenerateRandomPath(p, startx, starty, endx, endy);
                 break;
             case RIGHT:
                 endy = Random.Range(1, perTileDetail - 1);
                 endx = Mathf.FloorToInt((perTileDetail - 1) / 2);
-                p = GenerateRandomPath(p, RIGHT, startx, starty, endx, endy);
-
+                p = GenerateRandomPath(p, startx, starty, endx, endy);
                 break;
             case TOP:
                 endy = Mathf.FloorToInt((perTileDetail - 1) / 2);
                 endx = Random.Range(1, perTileDetail - 1);
-                p = GenerateRandomPath(p, BOT, startx, starty, endx, endy);
-
+                p = GenerateRandomPath(p, startx, starty, endx, endy);
                 break;
             case BOT:
                 endy = Mathf.FloorToInt((perTileDetail - 1) / 2);
                 endx = Random.Range(1, perTileDetail - 1);
-                p = GenerateRandomPath(p, TOP, startx, starty, endx, endy);
-
+                p = GenerateRandomPath(p, startx, starty, endx, endy);
                 break;
             case THROUGH_HORIZONTAL:
                 endx = perTileDetail - startx;
                 endy = Random.Range(1, perTileDetail - 1);              
                 if(startx == 0)
                 {
-                    p = GenerateRandomPath(p, RIGHT, startx, starty, endx, endy);
+                    p = GenerateRandomPath(p, startx, starty, endx, endy);
                 }
                 else
                 {
-                    p = GenerateRandomPath(p, LEFT, startx, starty, endx, endy);
+                    p = GenerateRandomPath(p, startx, starty, endx, endy);
                 }
 
-                if (r == start.y && c == start.x)
+                if (r != end.y || c != end.y)
                 {
-
-                }
-                else if (r == end.y && c == end.y)
-                {
-
-                }
-                else
-                {
-                    
+					if(startx == 0)
+					{
+						GenerateTile (tiling, 0, endy, r, c + 1);
+					}
+					else
+					{
+						GenerateTile (tiling, perTileDetail, endy, r, c - 1);
+					}
                 }
                 break;
             case THROUGH_VERTICAL:
@@ -979,24 +791,23 @@ public class TiledMazeGenerator : EditorWindow
                 endx = Random.Range(1, perTileDetail - 1);
                 if(starty == 0)
                 {
-                    p = GenerateRandomPath(p, BOT, startx, starty, endx, endy);
+                    p = GenerateRandomPath(p, startx, starty, endx, endy);
                 }
                 else
                 {
-                    p = GenerateRandomPath(p, TOP, startx, starty, endx, endy);
+                    p = GenerateRandomPath(p, startx, starty, endx, endy);
                 }
 
-                if (r == start.y && c == start.x)
+                if (r != end.y || c != end.y)
                 {
-
-                }
-                else if (r == end.y && c == end.y)
-                {
-
-                }
-                else
-                {
-
+					if(starty == 0)
+					{
+						GenerateTile (tiling, endx, 0, r + 1, c);
+					}
+					else
+					{
+						GenerateTile (tiling, endx, perTileDetail, r - 1, c);
+					}
                 }
                 break;
             case BOT_LEFT:
@@ -1004,30 +815,31 @@ public class TiledMazeGenerator : EditorWindow
                 {
                     endx = 0;
                     endy = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, TOP, startx, starty, endx, endy);
+                    p = GenerateRandomPath(p, startx, starty, endx, endy);
+					GenerateTile (tiling, perTileDetail, endy, r, c - 1);
                 }
                 else
                 {
                     endy = perTileDetail;
                     endx = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, RIGHT, startx, starty, endx, endy);
+                    p = GenerateRandomPath(p, startx, starty, endx, endy);
+					GenerateTile (tiling, endx, 0, r + 1, c);
                 }
-               
-
-
-                break;
+				break;
             case BOT_RIGHT:
                 if (starty == perTileDetail)
                 {
                     endx = perTileDetail;
                     endy = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, TOP, startx, starty, endx, endy);
+                    p = GenerateRandomPath(p, startx, starty, endx, endy);
+					GenerateTile (tiling, 0, endy, r, c + 1);
                 }
                 else
                 {
                     endy = perTileDetail;
                     endx = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, LEFT, startx, starty, endx, endy);
+                    p = GenerateRandomPath(p, startx, starty, endx, endy);
+					GenerateTile (tiling, endx, 0, r + 1, c);	
                 }
 
 
@@ -1037,13 +849,15 @@ public class TiledMazeGenerator : EditorWindow
                 {
                     endx = perTileDetail;
                     endy = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, BOT, startx, starty, endx, endy);
+                    p = GenerateRandomPath(p, startx, starty, endx, endy);
+					GenerateTile (tiling, 0, endy, r, c + 1);
                 }
                 else
                 {
                     endy = 0;
                     endx = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, LEFT, startx, starty, endx, endy);
+                    p = GenerateRandomPath(p, startx, starty, endx, endy);
+					GenerateTile (tiling, endx, perTileDetail, r - 1, c);
                 }
 
 
@@ -1053,13 +867,15 @@ public class TiledMazeGenerator : EditorWindow
                 {
                     endx = 0;
                     endy = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, BOT, startx, starty, endx, endy);
+                    p = GenerateRandomPath(p, startx, starty, endx, endy);
+					GenerateTile (tiling, perTileDetail, endy, r, c - 1);
                 }
                 else
                 {
                     endy = 0;
                     endx = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, RIGHT, startx, starty, endx, endy);
+                    p = GenerateRandomPath(p, startx, starty, endx, endy);
+					GenerateTile (tiling, endx, perTileDetail, r - 1, c);
                 }
 
 
@@ -1073,10 +889,11 @@ public class TiledMazeGenerator : EditorWindow
                     boty = perTileDetail;
                     leftx = 0;
                     lefty = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, BOT, startx, starty, midx, midy);
-                    p = GenerateRandomPath(p, BOT, midx, midy, botx, boty);
-                    p = GenerateRandomPath(p, LEFT, midx, midy, leftx, lefty);
-
+                    p = GenerateRandomPath(p, startx, starty, midx, midy);
+                    p = GenerateRandomPath(p, midx, midy, botx, boty);
+                    p = GenerateRandomPath(p, midx, midy, leftx, lefty);
+					GenerateTile (tiling, botx, 0, r + 1, c);
+					GenerateTile (tiling, perTileDetail, lefty, r, c - 1);
                 }
                 else if(starty == perTileDetail)
                 {
@@ -1084,9 +901,11 @@ public class TiledMazeGenerator : EditorWindow
                     topy = 0;
                     leftx = 0;
                     lefty = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, TOP, startx, starty, midx, midy);
-                    p = GenerateRandomPath(p, TOP, midx, midy, topx, topy);
-                    p = GenerateRandomPath(p, LEFT, midx, midy, leftx, lefty);
+                    p = GenerateRandomPath(p, startx, starty, midx, midy);
+                    p = GenerateRandomPath(p, midx, midy, topx, topy);
+                    p = GenerateRandomPath(p, midx, midy, leftx, lefty);
+					GenerateTile (tiling, topx, perTileDetail, r - 1, c);
+					GenerateTile (tiling, perTileDetail, lefty, r, c - 1);
                 }
                 else
                 {
@@ -1094,9 +913,11 @@ public class TiledMazeGenerator : EditorWindow
                     topy = 0;
                     botx = Random.Range(1, perTileDetail - 1);
                     boty = 0;
-                    p = GenerateRandomPath(p, RIGHT, startx, starty, midx, midy);
-                    p = GenerateRandomPath(p, TOP, midx, midy, topx, topy);
-                    p = GenerateRandomPath(p, BOT, midx, midy, botx, boty);
+                    p = GenerateRandomPath(p, startx, starty, midx, midy);
+                    p = GenerateRandomPath(p, midx, midy, topx, topy);
+                    p = GenerateRandomPath(p, midx, midy, botx, boty);
+					GenerateTile (tiling, topx, perTileDetail, r - 1, c);
+					GenerateTile (tiling, botx, perTileDetail, r + 1, c);
                 }
                 break;
             case RIGHT_T:
@@ -1108,9 +929,11 @@ public class TiledMazeGenerator : EditorWindow
                     boty = perTileDetail;
                     rightx = perTileDetail;
                     righty = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, BOT, startx, starty, midx, midy);
-                    p = GenerateRandomPath(p, BOT, midx, midy, botx, boty);
-                    p = GenerateRandomPath(p, RIGHT, midx, midy, rightx, righty);
+                    p = GenerateRandomPath(p, startx, starty, midx, midy);
+                    p = GenerateRandomPath(p, midx, midy, botx, boty);
+                    p = GenerateRandomPath(p, midx, midy, rightx, righty);
+					GenerateTile (tiling, botx, 0, r + 1, c);
+					GenerateTile (tiling, 0, righty, r, c + 1);
                 }
                 else if (starty == perTileDetail)
                 {
@@ -1118,9 +941,11 @@ public class TiledMazeGenerator : EditorWindow
                     topy = 0;
                     rightx = perTileDetail;
                     righty = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, TOP, startx, starty, midx, midy);
-                    p = GenerateRandomPath(p, TOP, midx, midy, topx, topy);
-                    p = GenerateRandomPath(p, RIGHT, midx, midy, rightx, righty);
+                    p = GenerateRandomPath(p, startx, starty, midx, midy);
+                    p = GenerateRandomPath(p, midx, midy, topx, topy);
+                    p = GenerateRandomPath(p, midx, midy, rightx, righty);
+					GenerateTile (tiling, topx, perTileDetail, r - 1, c);
+					GenerateTile (tiling, 0, righty, r, c + 1);
                 }
                 else
                 {
@@ -1128,9 +953,11 @@ public class TiledMazeGenerator : EditorWindow
                     boty = perTileDetail;
                     topx = Random.Range(1, perTileDetail - 1);
                     topy = 0;
-                    p = GenerateRandomPath(p, LEFT, startx, starty, midx, midy);
-                    p = GenerateRandomPath(p, BOT, midx, midy, botx, boty);
-                    p = GenerateRandomPath(p, TOP, midx, midy, topx, topy);
+                    p = GenerateRandomPath(p, startx, starty, midx, midy);
+                    p = GenerateRandomPath(p, midx, midy, botx, boty);
+                    p = GenerateRandomPath(p, midx, midy, topx, topy);
+					GenerateTile (tiling, botx, 0, r + 1, c);
+					GenerateTile (tiling, topx, perTileDetail, r - 1, c);
                 }
                 break;
             case TOP_T:
@@ -1142,9 +969,11 @@ public class TiledMazeGenerator : EditorWindow
                     topy = 0;
                     rightx = perTileDetail;
                     righty = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, RIGHT, startx, starty, midx, midy);
-                    p = GenerateRandomPath(p, RIGHT, midx, midy, rightx, righty);
-                    p = GenerateRandomPath(p, TOP, midx, midy, topx, topy);
+                    p = GenerateRandomPath(p, startx, starty, midx, midy);
+                    p = GenerateRandomPath(p, midx, midy, rightx, righty);
+                    p = GenerateRandomPath(p, midx, midy, topx, topy);
+					GenerateTile (tiling, 0, righty, r, c + 1);
+					GenerateTile (tiling, topx, perTileDetail, r - 1, c);
                 }
                 else if(startx == perTileDetail)
                 {
@@ -1152,9 +981,11 @@ public class TiledMazeGenerator : EditorWindow
                     topy = 0;
                     leftx = 0;
                     lefty = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, LEFT, startx, starty, midx, midy);
-                    p = GenerateRandomPath(p, LEFT, midx, midy, leftx, lefty);
-                    p = GenerateRandomPath(p, TOP, midx, midy, topx, topy);
+                    p = GenerateRandomPath(p, startx, starty, midx, midy);
+                    p = GenerateRandomPath(p, midx, midy, leftx, lefty);
+                    p = GenerateRandomPath(p, midx, midy, topx, topy);
+					GenerateTile (tiling, perTileDetail, lefty, r, c - 1);
+					GenerateTile (tiling, topx, perTileDetail, r - 1, c);
                 }
                 else
                 {
@@ -1162,9 +993,11 @@ public class TiledMazeGenerator : EditorWindow
                     righty = Random.Range(1, perTileDetail - 1);
                     leftx = 0;
                     lefty = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, BOT, startx, starty, midx, midy);
-                    p = GenerateRandomPath(p, RIGHT, midx, midy, rightx, righty);
-                    p = GenerateRandomPath(p, LEFT, midx, midy, leftx, lefty);
+                    p = GenerateRandomPath(p, startx, starty, midx, midy);
+                    p = GenerateRandomPath(p, midx, midy, rightx, righty);
+                    p = GenerateRandomPath(p, midx, midy, leftx, lefty);
+					GenerateTile (tiling, 0, righty, r, c + 1);
+					GenerateTile (tiling, perTileDetail, lefty, r, c - 1);
                 }
 
                 break;
@@ -1177,9 +1010,11 @@ public class TiledMazeGenerator : EditorWindow
                     boty = perTileDetail;
                     rightx = perTileDetail;
                     righty = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, RIGHT, startx, starty, midx, midy);
-                    p = GenerateRandomPath(p, BOT, midx, midy, botx, boty);
-                    p = GenerateRandomPath(p, RIGHT, midx, midy, rightx, righty);
+                    p = GenerateRandomPath(p, startx, starty, midx, midy);
+                    p = GenerateRandomPath(p, midx, midy, botx, boty);
+                    p = GenerateRandomPath(p, midx, midy, rightx, righty);
+					GenerateTile (tiling, botx, 0, r + 1, c);
+					GenerateTile (tiling, 0, righty, r, c + 1);
                 }
                 else if (startx == perTileDetail)
                 {
@@ -1187,9 +1022,11 @@ public class TiledMazeGenerator : EditorWindow
                     boty = perTileDetail;
                     leftx = 0;
                     lefty = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, LEFT, startx, starty, midx, midy);
-                    p = GenerateRandomPath(p, LEFT, midx, midy, leftx, lefty);
-                    p = GenerateRandomPath(p, BOT, midx, midy, botx, boty);
+                    p = GenerateRandomPath(p, startx, starty, midx, midy);
+                    p = GenerateRandomPath(p, midx, midy, leftx, lefty);
+                    p = GenerateRandomPath(p, midx, midy, botx, boty);
+					GenerateTile (tiling, perTileDetail, lefty, r, c - 1);
+					GenerateTile (tiling, botx, 0, r + 1, c);
                 }
                 else
                 {
@@ -1197,9 +1034,11 @@ public class TiledMazeGenerator : EditorWindow
                     lefty = Random.Range(1, perTileDetail - 1);
                     rightx = perTileDetail;
                     righty = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, TOP, startx, starty, midx, midy);
-                    p = GenerateRandomPath(p, LEFT, midx, midy, leftx, lefty);
-                    p = GenerateRandomPath(p, RIGHT, midx, midy, rightx, righty);
+                    p = GenerateRandomPath(p, startx, starty, midx, midy);
+                    p = GenerateRandomPath(p, midx, midy, leftx, lefty);
+                    p = GenerateRandomPath(p, midx, midy, rightx, righty);
+					GenerateTile (tiling, perTileDetail, lefty, r, c - 1);
+					GenerateTile (tiling, 0, righty, r, c + 1);
                 }
 
                 break;
@@ -1214,10 +1053,13 @@ public class TiledMazeGenerator : EditorWindow
                     topy = 0;
                     rightx = perTileDetail;
                     righty = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, RIGHT, startx, starty, midx, midy);
-                    p = GenerateRandomPath(p, BOT, midx, midy, botx, boty);
-                    p = GenerateRandomPath(p, RIGHT, midx, midy, rightx, righty);
-                    p = GenerateRandomPath(p, TOP, midx, midy, topx, topy);
+                    p = GenerateRandomPath(p, startx, starty, midx, midy);
+                    p = GenerateRandomPath(p, midx, midy, botx, boty);
+                    p = GenerateRandomPath(p, midx, midy, rightx, righty);
+                    p = GenerateRandomPath(p, midx, midy, topx, topy);
+					GenerateTile (tiling, botx, 0, r + 1, c);
+					GenerateTile (tiling, 0, righty, r, c + 1);
+					GenerateTile (tiling, topx, perTileDetail, r - 1, c);
                 }
                 else if (startx == perTileDetail)
                 {
@@ -1227,10 +1069,13 @@ public class TiledMazeGenerator : EditorWindow
                     topy = 0;
                     leftx = 0;
                     lefty = Random.Range(1, perTileDetail - 1);
-                    p = GenerateRandomPath(p, LEFT, startx, starty, midx, midy);
-                    p = GenerateRandomPath(p, BOT,  midx, midy, botx, boty);
-                    p = GenerateRandomPath(p, LEFT, midx, midy, leftx, lefty);
-                    p = GenerateRandomPath(p, TOP, midx, midy, topx, topy);
+                    p = GenerateRandomPath(p, startx, starty, midx, midy);
+                    p = GenerateRandomPath(p, midx, midy, botx, boty);
+                    p = GenerateRandomPath(p, midx, midy, leftx, lefty);
+                    p = GenerateRandomPath(p, midx, midy, topx, topy);
+					GenerateTile (tiling, botx, boty, r + 1, c);
+					GenerateTile (tiling, leftx, lefty, r, c - 1);
+					GenerateTile (tiling, topx, topy, r - 1, c);
                 }
                 else if(starty == 0)
                 {
@@ -1240,10 +1085,13 @@ public class TiledMazeGenerator : EditorWindow
                     righty = Random.Range(1, perTileDetail - 1);
                     botx = Random.Range(1, perTileDetail - 1);
                     boty = perTileDetail;
-                    p = GenerateRandomPath(p, BOT, startx, starty, midx, midy);
-                    p = GenerateRandomPath(p, BOT, midx, midy, botx, boty);
-                    p = GenerateRandomPath(p, RIGHT, midx, midy, rightx, righty);
-                    p = GenerateRandomPath(p, LEFT, midx, midy, leftx, lefty);
+                    p = GenerateRandomPath(p, startx, starty, midx, midy);
+                    p = GenerateRandomPath(p, midx, midy, botx, boty);
+                    p = GenerateRandomPath(p, midx, midy, rightx, righty);
+                    p = GenerateRandomPath(p, midx, midy, leftx, lefty);
+					GenerateTile (tiling, botx, 0, r + 1, c);
+					GenerateTile (tiling, 0, righty, r, c + 1);
+					GenerateTile (tiling, perTileDetail, lefty, r, c - 1);
                 }
                 else
                 {
@@ -1253,12 +1101,14 @@ public class TiledMazeGenerator : EditorWindow
                     righty = Random.Range(1, perTileDetail - 1);
                     topx = Random.Range(1, perTileDetail - 1);
                     topy = 0;
-                    p = GenerateRandomPath(p, TOP, startx, starty, midx, midy);
-                    p = GenerateRandomPath(p, LEFT, midx, midy, leftx, lefty);
-                    p = GenerateRandomPath(p, RIGHT, midx, midy, rightx, righty);
-                    p = GenerateRandomPath(p, TOP, midx, midy, topx, topy);
+                    p = GenerateRandomPath(p, startx, starty, midx, midy);
+                    p = GenerateRandomPath(p, midx, midy, leftx, lefty);
+                    p = GenerateRandomPath(p, midx, midy, rightx, righty);
+                    p = GenerateRandomPath(p, midx, midy, topx, topy);
+					GenerateTile (tiling, perTileDetail, lefty, r, c - 1);
+					GenerateTile (tiling, 0, righty, r, c + 1);
+					GenerateTile (tiling, topx, perTileDetail, r - 1, c);
                 }
-
                 break;
             default:
                 Debug.Log("Error with tiling.");
@@ -1295,77 +1145,76 @@ public class TiledMazeGenerator : EditorWindow
 
     }
 
-    int[,] GenerateRandomPath(int[,] pathArray, int direction, int startx, int starty, int endx, int endy)
-    {
-        int currX = startx;
-        int currY = starty;
-        int lastDirection = direction;
+	public int[,] GenerateRandomPath(int[,] pathArray, int startx, int starty, int endx, int endy)
+	{
+		Stack<int[,]> pathArrays = new Stack<int[,]> ();
+		Stack<int[]> positions = new Stack<int[]> ();
+		List<int[]> solutions = new List<int[]> ();
+		/*
+		 * Deletes the edges of the tile from the solution set.
+		 */
+		for (int y = 0; y < perTileDetail; y++) {
+			for (int x = 0; x < perTileDetail; x++) {
+				if ((x == 0 || x == perTileDetail - 1 || y == 0 || y == perTileDetail - 1)) {
+					pathArray [y, x] = -1;
+				}
+			}
+		}
 
-        pathArray[currY, currX] = 1;
+		pathArray [starty, startx] = 1;
+		pathArray [endy, endx] = 0;
+		pathArrays.Push (pathArray);
 
-        switch (direction)
-        {
-            case TOP:
-                currY--;
-                break;
-            case BOT:
-                currY++;
-                break;
-            case LEFT:
-                currX--;
-                break;
-            case RIGHT:
-                currX++;
-                break;
-            default:
-                Debug.Log("Not a valid direction!");
-                break;
-        }
+		positions.Push (new int[] { startx, starty });
 
-        pathArray[currY, currX] = 1;
+		while (positions.Peek()[0] != endx || positions.Peek()[1] != endy) {
 
-        while(currX != endx || currY != endy)
-        {
-            if((currX == endx && currY == endy + 1) || (currX == endx && currY == endy - 1)
-                || (currY == endy && currX == endx - 1) || (currY == endy && currX == endx + 1))
-            {
-                currX = endx;
-                currY = endy;
-            }
-            else if(currX == 1 && currY == 1)
-            {
-                do
-                {
-                    if(Random.value > 0.5)
-                    {
-                        direction = RIGHT;
-                    }
-                    else
-                    {
-                        direction = BOT;
-                    }
-                } while (direction != lastDirection);
-            }
-            else if(currX == 1 && currY == perTileDetail - 1)
-            {
+			solutions = new List<int[]> ();
+			pathArray = (int[,])pathArrays.Peek ().Clone();
+			if (positions.Peek()[1] > 0 && pathArray [positions.Peek()[1] - 1, positions.Peek()[0]] == 0) {
+				solutions.Add (new int[] { positions.Peek()[0], positions.Peek()[1] - 1});
+			}
+			if (positions.Peek()[1] < perTileDetail - 1 && pathArray [positions.Peek()[1] + 1, positions.Peek()[0]] == 0) {
+				solutions.Add (new int[] { positions.Peek()[0], positions.Peek()[1] + 1 });
+			}
+			if (positions.Peek()[0] > 0 && pathArray [positions.Peek()[1], positions.Peek()[0] - 1] == 0) {
+				solutions.Add (new int[] { positions.Peek()[0] - 1, positions.Peek()[1] });
+			}
+			if (positions.Peek()[0] < perTileDetail - 1 && pathArray [positions.Peek()[1], positions.Peek()[0] + 1] == 0) {
+				solutions.Add (new int[] { positions.Peek()[0] + 1, positions.Peek()[1] });
+			}
 
-            }
-            else if(currX == perTileDetail - 1 && currY == perTileDetail - 1)
-            {
+			if (solutions.Count == 0) {				
+				pathArrays.Pop ();
+				pathArray = pathArrays.Pop ();
+				pathArray [positions.Peek()[1], positions.Peek()[0]] = -1;
+				pathArrays.Push (pathArray);
+				positions.Pop ();
+			} else {
+				foreach(int[] sol in solutions){
+					if (sol [1] == endy && sol [0] == endx) {
+						pathArray [endy, endx] = 1;
+						positions.Push (new int[] { endx, endy });
+					}
+				}
 
-            }
-            else if(currX == perTileDetail - 1 && currY == 1)
-            {
+				if (positions.Peek()[0] != endx || positions.Peek()[1] != endy) {
+					int[][] solutionArray = solutions.ToArray ();
+					int[] chosen = solutionArray[Random.Range(0, solutions.Count)];
+					pathArray [chosen [1], chosen [0]] = 1;
+					positions.Push (new int[] { chosen[0], chosen[1] });
+					foreach(int[] sol in solutions){
+						if (pathArray [sol [1], sol [0]] != 1) {
+							pathArray [sol [1], sol [0]] = -1;
+						}
+					}
+				}
+				pathArrays.Push (pathArray);
+			}
+		}
+		return pathArrays.Pop ();
+	}
 
-            }
-            else
-            {
 
-            }
-            pathArray[currY, currX] = 1;
-            lastDirection = direction;
-        }
-
-        return pathArray;
-    }
 }
+
