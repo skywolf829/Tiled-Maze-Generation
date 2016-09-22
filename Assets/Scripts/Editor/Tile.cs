@@ -79,6 +79,27 @@ namespace Assets.Scripts.Editor
         public bool hasRightEntrance() { return !(rightEntrance.x == 0 && rightEntrance.y == 0); }
         public bool hasBotEntrance() { return !(botEntrance.x == 0 && botEntrance.y == 0); }
         public bool hasTopEntrance() { return !(topEntrance.x == 0 && topEntrance.y == 0); }
+        public int numOfEntrances()
+        {
+            int x = 0;
+            if(!(leftEntrance.x == 0 && leftEntrance.y == 0))
+            {
+                x++;
+            }
+            if (!(rightEntrance.x == 0 && rightEntrance.y == 0))
+            {
+                x++;
+            }
+            if (!(botEntrance.x == 0 && botEntrance.y == 0))
+            {
+                x++;
+            }
+            if (!(topEntrance.x == 0 && topEntrance.y == 0))
+            {
+                x++;
+            }
+            return x;
+        }
         public Vector2 getRightEntrance() { return rightEntrance; }
         public Vector2 getLeftEntrance() { return leftEntrance; }
         public Vector2 getTopEntrance() { return topEntrance; }
@@ -172,16 +193,19 @@ namespace Assets.Scripts.Editor
 
             //now handle last bit of curve
             Vector2 p1 = samplePoints.Pop(); //last sample point
-            Vector2 p0 = samplePoints.Peek(); //second last sample point
-            Vector2 tangent = (p0 - potentialSamplePoint).normalized;
-            float d2 = (potentialSamplePoint - p1).magnitude;
-            float d1 = (p1 - p0).magnitude;
-            p1 = p1 + tangent * ((d1 - d2) / 2);
+            if (samplePoints.Count > 0)
+            {
+                Vector2 p0 = samplePoints.Peek(); //second last sample point
+                Vector2 tangent = (p0 - potentialSamplePoint).normalized;
+                float d2 = (potentialSamplePoint - p1).magnitude;
+                float d1 = (p1 - p0).magnitude;
+                p1 = p1 + tangent * ((d1 - d2) / 2);
 
-            samplePoints.Push(p1);
-            samplePoints.Push(potentialSamplePoint);
-
-            Interpolate(new List<Vector2>(samplePoints), scale);
+                samplePoints.Push(p1);
+                samplePoints.Push(potentialSamplePoint);
+                Interpolate(new List<Vector2>(samplePoints), scale);
+            }
+            
         }
         private Vector2 CalculateBezierPoint(int curveIndex, float t)
         {
@@ -517,32 +541,17 @@ namespace Assets.Scripts.Editor
                     pathArrays.Push(path);
                 }
             }
-            path =  pathArrays.Pop();
+            path = pathArrays.Pop();
             paths.Add(jaggedPath);
-            cleanPath();
         }
         public void cleanPath()
         {
-            bool finished = false;
-            while (!finished)
+            Vector2 pos = paths[0][paths[0].Count - 1];
+            while (AliveNeighbors(path, (int)pos.y, (int)pos.x) < 2)
             {
-                finished = true;
-                for (int r = 1; r < tileDetail - 1; r++)
-                {
-                    for (int c = 1; c < tileDetail - 1; c++)
-                    {
-                        if (path[r, c] == 1 && AliveNeighbors(path, r, c) < 2)
-                        {
-                            finished = false;
-                            path[r, c] = 0;
-                        }
-                        if (path[r, c] < 1 && AliveNeighbors(path, r, c) > 3)
-                        {
-                            finished = false;
-                            path[r, c] = 1;
-                        }
-                    }
-                }
+                path[(int)pos.y, (int)pos.x] = 0;
+                paths[0].RemoveAt(paths[0].Count - 1);
+                pos = paths[0][paths[0].Count - 1];
             }
         }
         public int AliveNeighbors(int[,] pathArray, int r, int c)
@@ -587,7 +596,7 @@ namespace Assets.Scripts.Editor
 
             terrainData.SetHeights(0, 0, heightmap);
         }
-        public void createSplatMap(Texture2D[] textures, int textureResolution)
+        public void createSplatMap(Texture2D[] textures, int textureResolution, bool sampled)
         {
             terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath("Assets/" + name + row + "_" + column + ".asset", typeof(TerrainData));
             terrainData.baseMapResolution = textureResolution;
@@ -601,7 +610,7 @@ namespace Assets.Scripts.Editor
             }
             terrainData.splatPrototypes = splats;
             float[,,] splatmapData = new float[terrainData.alphamapWidth, terrainData.alphamapHeight, terrainData.alphamapLayers];
-
+            if(numOfEntrances() > 2) cleanPath();
             for (int j = 0; j < paths.Count; j++)
             {
                 for (int i = 0; i < paths[j].Count; i++)
@@ -614,16 +623,17 @@ namespace Assets.Scripts.Editor
                     paths[j][i] = new Vector2(currentPixel.x + xRatio * (terrainData.alphamapWidth / (2f * tileDetail)),
                         currentPixel.y + yRatio * (terrainData.alphamapHeight / (2f * tileDetail)));
                 }
-
-                SamplePoints(paths[j], 10, 1000, 0.33f);
+                
+                if(sampled) SamplePoints(paths[j], 10, 1000, 0.33f);
+                else Interpolate(paths[j], 0.33f);
                 List<Vector2> drawingPoints = GetDrawingPoints0();
 
                 float adjustedPathWidth = terrainData.alphamapWidth * (pathWidth / width) / 2;
                 foreach (Vector2 point in drawingPoints)
                 {
-                    for (int y = 0; y < terrainData.alphamapHeight; y++)
+                    for (int y = Mathf.Max(0, (int)(point.y - adjustedPathWidth / 2)); y < Mathf.Min(terrainData.alphamapHeight, (int)(point.y + adjustedPathWidth / 2)); y++)
                     {
-                        for (int x = 0; x < terrainData.alphamapWidth; x++)
+                        for (int x = Mathf.Max(0, (int)(point.x - adjustedPathWidth / 2)); x < Mathf.Min(terrainData.alphamapWidth, (int)(point.x + adjustedPathWidth / 2)); x++)
                         {
                             if (Vector2.Distance(new Vector2(x, y), point) < adjustedPathWidth)
                             {
@@ -634,26 +644,6 @@ namespace Assets.Scripts.Editor
 
                 }
             }
-            /*
-            for (int r = 0; r < tileDetail; r++)
-            {
-                for (int c = 0; c < tileDetail; c++)
-                {
-                    if (path[r, c] > 0)
-                    {
-                        for (int y = Mathf.FloorToInt(((float)r / tileDetail) * textureResolution);
-                            y < Mathf.FloorToInt(((float)(r + 1) / tileDetail) * textureResolution); y++)
-                        {
-                            for (int x = Mathf.FloorToInt(((float)c / tileDetail) * textureResolution);
-                                x < Mathf.FloorToInt(((float)(c + 1) / tileDetail) * textureResolution); x++)
-                            {
-                                splatmapData[y, x, 0] = 1.0f;
-                            }
-                        }
-                    }
-                }
-            }
-            */
             terrainData.SetAlphamaps(0, 0, splatmapData);
             AssetDatabase.SaveAssets();
         }

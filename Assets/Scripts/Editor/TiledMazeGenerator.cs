@@ -50,6 +50,7 @@ public class TiledMazeGenerator : EditorWindow
     private bool heightmapSmoothing = false;
     private bool texturesBasedOnHeightmap = false;
     private bool texturesBasedOnPath = true;
+    private bool sampled = true;
 
     private float tileWidth = 10, tileHeight = 10, pathWidth = 2;
     private float pathHeight = 0, otherHeight = 5;
@@ -203,6 +204,7 @@ public class TiledMazeGenerator : EditorWindow
                 EditorGUILayout.Space();
                 EditorGUILayout.Space();
                 EditorGUILayout.LabelField("Options for texturing");
+                sampled = EditorGUILayout.Toggle("Sample bezier curve", sampled);
                 baseTextureResolution = EditorGUILayout.IntField("Base Texture Reolution", baseTextureResolution);
                 baseTextureResolution = Mathf.ClosestPowerOfTwo(baseTextureResolution);
                 baseTextureResolution = Mathf.Clamp(baseTextureResolution, 16, 2048);
@@ -212,7 +214,7 @@ public class TiledMazeGenerator : EditorWindow
                     texturesBasedOnHeightmap = EditorGUILayout.Toggle("Texture based on heightmap", texturesBasedOnHeightmap);
                     if (texturesBasedOnHeightmap) texturesBasedOnPath = false;
                 }
-                texturesBasedOnPath = EditorGUILayout.Toggle("Textuing based on path", texturesBasedOnPath);
+                texturesBasedOnPath = EditorGUILayout.Toggle("Texturing based on path", texturesBasedOnPath);
                 if (texturesBasedOnPath) texturesBasedOnHeightmap = false;
                 EditorGUILayout.EndHorizontal();
 
@@ -301,13 +303,13 @@ public class TiledMazeGenerator : EditorWindow
             GUILayout.Label("Path were to save TerrainData:");
             saveLocation = EditorGUILayout.TextField("Assets/", saveLocation);
             GUILayout.BeginHorizontal();
-			if (GUILayout.Button ("Generate all tiles")) {
+            if (GUILayout.Button("Generate all tiles")) {
                 if (ValidateBitVectors())
                 {
                     tiles = new Tile[mazeHeight, mazeWidth];
-                    for(int r = 0; r < mazeHeight; r++)
+                    for (int r = 0; r < mazeHeight; r++)
                     {
-                        for(int c = 0; c < mazeWidth; c++)
+                        for (int c = 0; c < mazeWidth; c++)
                         {
                             tiles[r, c] = new Tile(r, c, tileWidth, tileHeight, perTileDetail);
                             tiles[r, c].setPathWidth(pathWidth);
@@ -318,12 +320,12 @@ public class TiledMazeGenerator : EditorWindow
                     {
                         for (int c = 0; c < mazeWidth; c++)
                         {
-                            tiles[r, c].createSplatMap(textures, baseTextureResolution);
+                            tiles[r, c].createSplatMap(textures, baseTextureResolution, sampled);
                             tiles[r, c].createTile();
                         }
                     }
                 }
-			}
+            }
             GUILayout.EndHorizontal();
         } 
         else if (useCreatedTiles)
@@ -518,6 +520,7 @@ public class TiledMazeGenerator : EditorWindow
     {
         int[,] tiling = createTilingFromEBP();        
         int startx, starty;
+        bool cont = true;
         if (tiles[(int)start.y, (int)start.x].getType() == BOT)
         {
             startx = Random.Range(1, perTileDetail - 1);
@@ -546,7 +549,7 @@ public class TiledMazeGenerator : EditorWindow
         else
         {
             Debug.Log("Start point is invalid.");
-            return;
+            cont = false;
         }
 
         if (tiles[(int)end.y, (int)end.x].getType() == BOT)
@@ -568,9 +571,12 @@ public class TiledMazeGenerator : EditorWindow
         else
         {
             Debug.Log("End point is invalid.");
-            return;
+            cont = false;
         }
-        GenerateTile2((int)start.y, (int)start.x);
+        if (cont)
+        {
+            GenerateTile2((int)start.y, (int)start.x);
+        }
     }
     private void GenerateTile2(int r, int c)
     {
