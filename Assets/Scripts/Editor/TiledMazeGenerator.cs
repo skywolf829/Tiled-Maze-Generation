@@ -310,6 +310,7 @@ public class TiledMazeGenerator : EditorWindow
                         for(int c = 0; c < mazeWidth; c++)
                         {
                             tiles[r, c] = new Tile(r, c, tileWidth, tileHeight, perTileDetail);
+                            tiles[r, c].setPathWidth(pathWidth);
                         }
                     }
                     GenerateTiles();
