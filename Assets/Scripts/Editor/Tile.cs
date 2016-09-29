@@ -168,6 +168,7 @@ namespace Assets.Scripts.Editor
         {
             if (sourcePoints.Count < 2)
             {
+                Debug.Log("issue");
                 return;
             }
 
@@ -543,6 +544,42 @@ namespace Assets.Scripts.Editor
             }
             path = pathArrays.Pop();
             paths.Add(jaggedPath);
+
+            /*
+             * Split the path that was intercepted
+             */
+            for(int i = 0; i < paths.Count - 1; i++)
+            {
+                if(paths[i].Contains(jaggedPath[jaggedPath.Count - 1]) && paths[i].IndexOf(jaggedPath[jaggedPath.Count - 1]) != paths[i].Count - 1)
+                {
+                    List<Vector2> p1 = new List<Vector2>();
+                    List<Vector2> p2 = new List<Vector2>();
+                    int spot = paths[i].IndexOf(jaggedPath[jaggedPath.Count - 1]);
+                    for(int j = 0; j < paths[i].Count; j++)
+                    {
+                        if (j < spot)
+                        {
+                            p1.Add(paths[i][j]);
+                        }
+                        else if (j > spot)
+                        {
+                            p2.Add(paths[i][j]);
+                        }
+                        else
+                        {
+                            p1.Add(paths[i][j]);
+                            p2.Add(paths[i][j]);
+                        }
+                    }
+                    paths.Remove(paths[i]);
+                    paths.Insert(i, p1);
+                    paths.Insert(i + 1, p2);
+                    i = paths.Count;
+                    
+                }
+            }
+            
+            
         }
         public void cleanPath()
         {
@@ -611,8 +648,9 @@ namespace Assets.Scripts.Editor
             terrainData.splatPrototypes = splats;
             float[,,] splatmapData = new float[terrainData.alphamapWidth, terrainData.alphamapHeight, terrainData.alphamapLayers];
             if(numOfEntrances() > 2) cleanPath();
+
             for (int j = 0; j < paths.Count; j++)
-            {
+            {                
                 for (int i = 0; i < paths[j].Count; i++)
                 {
                     Vector2 currentPixel = new Vector2((terrainData.alphamapWidth * (paths[j][i].x / tileDetail) + (terrainData.alphamapWidth / (2 * tileDetail))),
@@ -624,10 +662,9 @@ namespace Assets.Scripts.Editor
                         currentPixel.y + yRatio * (terrainData.alphamapHeight / (2f * tileDetail)));
                 }
                 
-                if(sampled) SamplePoints(paths[j], 10, 1000, 0.33f);
+                if (sampled && paths[j].Count > 3) SamplePoints(paths[j], 10, 1000, 0.33f);
                 else Interpolate(paths[j], 0.33f);
                 List<Vector2> drawingPoints = GetDrawingPoints0();
-
                 float adjustedPathWidth = terrainData.alphamapWidth * (pathWidth / width) / 2;
                 foreach (Vector2 point in drawingPoints)
                 {
