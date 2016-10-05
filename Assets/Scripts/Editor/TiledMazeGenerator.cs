@@ -47,8 +47,16 @@ public class TiledMazeGenerator : EditorWindow
     private int perTileDetail = 5;
     private int numPossibleExits = 2;
 
+    private float tileWidth = 10;
+    private float tileHeight = 10;
+
+    private bool sampled = false;
+    private int baseTextureResolution = 1024;
+    private float pathWidth = 2;
+
     private int selectedRow, selectedColumn;
     private Texture2D[,] displayTextures = new Texture2D[4, 4];
+    private Texture2D[] textures = new Texture2D[1];
     private Tile[,] tiles = new Tile[4, 4];
     private int[,] tiling = new int[4, 4];
     private string[,] tilingFiles = new string[4, 4];
@@ -126,12 +134,43 @@ public class TiledMazeGenerator : EditorWindow
             GUILayout.EndHorizontal();
         }
         GUILayout.EndVertical();
+
         DropAreaGUI();
+        TileOptions();
+        TextureArea();
 
-
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Load tiles into terrain"))
+        {
+            for (int i = 0; i < mazeHeight; i++)
+            {
+                for (int j = 0; j < mazeWidth; j++)
+                {
+                    tiles[i, j].instantiateTile();
+                    tiles[i, j].loadPathsFromPath();
+                    tiles[i, j].setPathWidth(pathWidth);
+                    tiles[i, j].setWidth(tileWidth);
+                    tiles[i, j].setHeight(tileHeight);
+                    tiles[i, j].createSplatMap(textures, baseTextureResolution, sampled);
+                    tiles[i, j].createTile();
+                }
+            }
+        }
+        if (GUILayout.Button("Load selected tile into terrain"))
+        {
+            tiles[selectedRow, selectedColumn].instantiateTile();
+            tiles[selectedRow, selectedColumn].loadPathsFromPath();
+            tiles[selectedRow, selectedColumn].setPathWidth(pathWidth);
+            tiles[selectedRow, selectedColumn].setWidth(tileWidth);
+            tiles[selectedRow, selectedColumn].setHeight(tileHeight);
+            tiles[selectedRow, selectedColumn].createSplatMap(textures, baseTextureResolution, sampled);
+            tiles[selectedRow, selectedColumn].createTile();
+                
+        }
+        GUILayout.EndHorizontal();
         GUILayout.EndScrollView();
     }
-
+    
     private bool ValidateSaveLocation()
     {
         if (saveLocation == string.Empty) saveLocation = "GeneratedMazeTiles/";
@@ -206,8 +245,7 @@ public class TiledMazeGenerator : EditorWindow
             for(int c = 0; c < mazeWidth; c++)
             {
                 displayTextures[r, c] = Texture2D.whiteTexture;
-                tiles[r, c] = new Tile();
-                tiles[r, c].setDetail(perTileDetail);
+                tiles[r, c] = new Tile(r, c, 10, 10, perTileDetail);
                 tiling[r, c] = 0;
                 tilingFiles[r, c] = "";
             }
@@ -1013,6 +1051,7 @@ public class TiledMazeGenerator : EditorWindow
         displayTextures[r, c] = temp;
         displayTextures[r, c].Apply();
     }
+
     public void DropAreaGUI()
     {
         Event evt = Event.current;
@@ -1042,6 +1081,36 @@ public class TiledMazeGenerator : EditorWindow
                 }
                 break;
         }
+    }
+    public void TileOptions()
+    {
+        tileWidth = EditorGUILayout.FloatField("Tile width(m)", tileWidth);
+        tileHeight = EditorGUILayout.FloatField("Tile height(m)", tileHeight);
+    }
+    public void TextureArea()
+    {
+        EditorGUILayout.LabelField("Options for texturing");
+        pathWidth = EditorGUILayout.FloatField("Path width", pathWidth);
+        pathWidth = Mathf.Clamp(pathWidth, 0, Mathf.Min(tileWidth, tileHeight));
+        sampled = EditorGUILayout.Toggle("Sample bezier curve", sampled);
+        baseTextureResolution = EditorGUILayout.IntField("Base Texture Reolution", baseTextureResolution);
+        baseTextureResolution = Mathf.ClosestPowerOfTwo(baseTextureResolution);
+        baseTextureResolution = Mathf.Clamp(baseTextureResolution, 16, 2048);
+       
+        for (int i = 0; i < textures.Length; i++)
+        {
+            textures[i] = (Texture2D)EditorGUILayout.ObjectField("Texture " + i, textures[i], typeof(Texture), true);
+        }
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Add texture"))
+        {
+            ArrayUtility.Add(ref textures, null);
+        }
+        if (GUILayout.Button("Remove texture"))
+        {
+            if (textures.Length > 0) ArrayUtility.RemoveAt(ref textures, textures.Length - 1);
+        }
+        GUILayout.EndHorizontal();
     }
 }
 
