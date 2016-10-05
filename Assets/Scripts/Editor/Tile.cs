@@ -48,7 +48,7 @@ namespace Assets.Scripts.Editor
         {
             completed = false;
             path = new int[0, 0];
-            name = "Terrain";
+            name = "";
             controlPoints = new List<Vector2>();
             terrainData = new TerrainData();
             paths = new List<List<Vector2>>();
@@ -61,13 +61,13 @@ namespace Assets.Scripts.Editor
             height = h;
             tileDetail = detail;
             completed = false;
-            name = "Terrain";
+            name = r +"_" + c;
             path = new int[tileDetail, tileDetail];
             controlPoints = new List<Vector2>();
-            terrainData = new TerrainData();
+            //terrainData = new TerrainData();
             paths = new List<List<Vector2>>();
-            AssetDatabase.CreateAsset(terrainData, "Assets/" + name + r + "_" + c + ".asset");
-            AssetDatabase.SaveAssets();
+            //AssetDatabase.CreateAsset(terrainData, "Assets/" + name + r + "_" + c + ".asset");
+            //AssetDatabase.SaveAssets();
         }
 
         public bool isCreated() { return completed; }
@@ -104,16 +104,46 @@ namespace Assets.Scripts.Editor
         public Vector2 getLeftEntrance() { return leftEntrance; }
         public Vector2 getTopEntrance() { return topEntrance; }
         public Vector2 getBotEntrance() { return botEntrance; }
+        public int[,] getPath() { return path; }
 
         public void setRow(int r) { row = r; }
         public void setCol(int c) { column = c; }
         public void setDetail(int d) { tileDetail = d; }
         public void setType(int t) { tileType = t; }
         public void setPathWidth(float p) { pathWidth = p; }
+        public void setName(string n) { name = n; }
         public void setRightEntrance(Vector2 location) { rightEntrance = location; }
         public void setLeftEntrance(Vector2 location) { leftEntrance = location; }
         public void setTopEntrance(Vector2 location) { topEntrance = location; }
         public void setBotEntrance(Vector2 location) { botEntrance = location; }
+        public void setPath(int[,] p) { path = p; updateEntrances(); }
+        public void setComplete(bool b) { completed = b; }
+        private void updateEntrances()
+        {
+            topEntrance = leftEntrance = rightEntrance = botEntrance = new Vector2(0, 0);            
+            for(int r = 0; r < tileDetail; r++)
+            {
+                for(int c = 0; c < tileDetail; c++)
+                {                                       
+                    if (r == 0 && path[r, c] == 1)
+                    {
+                        topEntrance = new Vector2(c, r);
+                    }
+                    if(r == tileDetail - 1 && path[r, c] == 1)
+                    {
+                        botEntrance = new Vector2(c, r);
+                    }
+                    if(c == 0 && path[r, c] == 1)
+                    {
+                        leftEntrance = new Vector2(c, r);
+                    }
+                    if(c == tileDetail - 1 && path[r, c] == 1)
+                    {
+                        rightEntrance = new Vector2(c, r);
+                    }
+                }
+            }
+        }
         
         private void Interpolate(List<Vector2> segmentPoints, float scale)
         {
@@ -626,6 +656,23 @@ namespace Assets.Scripts.Editor
             return alive;
         }
 
+        public void saveTileArray(string l)
+        {
+            FileStream file = File.Create(Application.dataPath + "/" + l + "/" + name + ".tile");    
+            
+            for (int i = 0; i < path.GetLength(0); i++)
+            {
+                for(int j = 0; j < path.GetLength(1); j++)
+                {
+                    file.WriteByte((byte)path[i, j]);
+                }
+            }            
+            file.Close();            
+        }
+        public void loadTileArray(string l)
+        {
+
+        }
         public void createHeightMap(int heightMapResolution)
         {
             terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath("Assets/" + name + row + "_" + column + ".asset", typeof(TerrainData));

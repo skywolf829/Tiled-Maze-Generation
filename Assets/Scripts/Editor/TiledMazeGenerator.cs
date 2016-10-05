@@ -42,312 +42,122 @@ public class TiledMazeGenerator : EditorWindow
     private const int TOP = 14;
     private const int BOT = 15;
 
-    private bool useCreatedTiles = false;
-    private bool generateTiles = true;
-    private bool textureTiles = true;
-    private bool heightmapBasedPath = false;
-    private bool objectsBasedPath = false;
-    private bool heightmapSmoothing = false;
-    private bool texturesBasedOnHeightmap = false;
-    private bool texturesBasedOnPath = true;
-    private bool sampled = true;
+    private string saveLocation = "/GeneratedMazeTiles";
+    private string usingPath = "/GeneratedMazeTiles/5_2/"; 
+    private int perTileDetail = 5;
+    private int numPossibleExits = 2;
 
-    private float tileWidth = 10, tileHeight = 10, pathWidth = 2;
-    private float pathHeight = 0, otherHeight = 5;
-    private int heightmapResolution = 129, detailResolution = 128, detailResolutionPerPatch = 8, baseTextureResolution = 128, perTileDetail = 5;
-
-    private int gaussBlurRadius = 3, gaussBlurPass = 1;
-
-    private Texture2D[] textures = new Texture2D[1];
-    private float[] textureProportion = new float[1];
-    private float[] textureHeight = new float[1];
-    private bool[] textureOnPath = new bool[1];
-
-    private string saveLocation;
-
-    private GameObject[] objectsOnPath = new GameObject[1];
-    private bool[] objectOnPathIsTree = new bool[1];
-    private bool[] objectOnPath = new bool[1];
-    private float[] pToMakeObject = new float[1];
-    private float[] objectPlacementStrictness = new float[1];
-
-    private Tile[,] tiles;
+    private int selectedRow, selectedColumn;
+    private Texture2D[,] displayTextures = new Texture2D[4, 4];
+    private Tile[,] tiles = new Tile[4, 4];
+    private int[,] tiling = new int[4, 4];
+    private string[,] tilingFiles = new string[4, 4];
 
     private int mazeWidth = 4, mazeHeight = 4;
     private int[] VEBP = new int[] { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 }, HEBP = new int[] { 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0 };
     private string VEBPString = "111111111111", HEBPString = "000110000001";
 
-    private Vector2 start = new Vector2(0, 0), end = new Vector2(3, 0);
+    private TextAsset t;
+    List<int> exits;
 
+    private void OnEnable()
+    {
+        updateArrays();
+    }
     private void OnGUI()
     {
         scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, true);
+        saveLocation = EditorGUILayout.TextField("Save location", saveLocation);
+        int oldDetail = perTileDetail;
+        perTileDetail = Mathf.Clamp(EditorGUILayout.IntField("Detail per tile", perTileDetail), 3, 9);
+        if(perTileDetail % 2 == 0)
+        {
+            perTileDetail++;
+        }
+        if(oldDetail != perTileDetail)
+        {
+            updateArrays();
+        }
+        numPossibleExits = Mathf.Clamp(EditorGUILayout.IntField("Possible exits", numPossibleExits), 1, (perTileDetail - 2));
 
-        EditorGUILayout.BeginHorizontal();
-        generateTiles = EditorGUILayout.Toggle("Generate tiles", generateTiles);
-        if (generateTiles) useCreatedTiles = false;
-        useCreatedTiles = EditorGUILayout.Toggle("Use created tiles", useCreatedTiles);
-        if (useCreatedTiles) generateTiles = false;
-        EditorGUILayout.EndHorizontal();
+        if (GUILayout.Button("Generate all tiles")) {
+            if (ValidateSaveLocation())
+            {                     
+                TilePathGenerator tpg = new TilePathGenerator();
+                tpg.setDetail(perTileDetail);
+                tpg.setSaveLocation(saveLocation);
+                tpg.setNumPossibleExits(numPossibleExits);
+                tpg.beginGenerator();
+            }
+        }
+
+        VEBPString = EditorGUILayout.TextField("VEBP", VEBPString);
+        HEBPString = EditorGUILayout.TextField("HEBP", HEBPString);
+
+        int oldWidth = mazeWidth;
+        int oldHeight = mazeHeight;
 
         mazeWidth = EditorGUILayout.IntField("Maze width", mazeWidth);
         if (mazeWidth < 2) mazeWidth = 2;
         mazeHeight = EditorGUILayout.IntField("Maze height", mazeHeight);
         if (mazeHeight < 2) mazeHeight = 2;
 
-        EditorGUILayout.BeginHorizontal(GUILayout.ExpandWidth(false));
-        start = EditorGUILayout.Vector2Field("Start tile", start);
-        EditorGUILayout.EndHorizontal();
-        start.x = Mathf.Clamp(start.x, 0, mazeWidth - 1);
-        start.y = Mathf.Clamp(start.y, 0, mazeHeight - 1);
-        EditorGUILayout.BeginHorizontal(GUILayout.ExpandWidth(false));
-        end = EditorGUILayout.Vector2Field("End tile", end);
-        EditorGUILayout.EndHorizontal();
-        end.x = Mathf.Clamp(end.x, 0, mazeWidth - 1);
-        end.y = Mathf.Clamp(end.y, 0, mazeHeight - 1);
-         
-        VEBPString = EditorGUILayout.TextField("VEBP", VEBPString);
-        HEBPString = EditorGUILayout.TextField("HEBP", HEBPString);
-        if (GUILayout.Button("Randomize Bit Vectors"))
+        if(oldWidth != mazeWidth || oldHeight != mazeHeight)
         {
-            VEBPString = "";
-            HEBPString = "";
-            for (int i = 0; i < mazeWidth * (mazeHeight - 1); i++)
-            {
-                if (Random.value > 0.5)
-                {
-                    VEBPString = VEBPString + "0";
-                }
-                else
-                {
-                    VEBPString = VEBPString + "1";
-                }
-            }
-            for (int i = 0; i < (mazeWidth - 1) * mazeHeight; i++)
-            {
-                if (Random.value > 0.5)
-                {
-                    HEBPString = HEBPString + "0";
-                }
-                else
-                {
-                    HEBPString = HEBPString + "1";
-                }
-            }
+            updateArrays();
+        } 
+
+        if(GUILayout.Button("Randomize tiles") && ValidateBitVectors())
+        {
+            randomizeTiles();
         }
-
-        if (generateTiles)
+        GUILayout.BeginVertical();
+        for(int i  = 0; i < mazeHeight; i++)
         {
-            EditorGUILayout.Space();
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Options for generated tiles");
-            EditorGUILayout.BeginHorizontal();
-            textureTiles = EditorGUILayout.Toggle("Texture tiles", textureTiles);
-            heightmapBasedPath = EditorGUILayout.Toggle("Heightmap based on path", heightmapBasedPath);
-            objectsBasedPath = EditorGUILayout.Toggle("Objects based on path", objectsBasedPath);
-            EditorGUILayout.EndHorizontal();
-
-            tileWidth = EditorGUILayout.FloatField("Tile width", tileWidth);
-            if (tileWidth < 0) tileWidth = 0;
-            tileHeight = EditorGUILayout.FloatField("Tile height", tileHeight);
-            if (tileHeight < 0) tileHeight = 0;
-            pathWidth = EditorGUILayout.FloatField("Path width", pathWidth);
-            pathWidth = Mathf.Clamp(pathWidth, 0, Mathf.Min(new float[] { tileWidth, tileHeight }));
-            perTileDetail = EditorGUILayout.IntField("Detail per tile", perTileDetail);
-            perTileDetail = Mathf.Clamp(perTileDetail, 3, 10);
-
-            if (heightmapBasedPath)
+            GUILayout.BeginHorizontal(GUILayout.Width(1));
+            for(int j = 0; j < mazeWidth; j++)
             {
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.LabelField("Options for heightmap");
-
-                pathHeight = EditorGUILayout.FloatField("Terrain path Height", pathHeight);
-                otherHeight = EditorGUILayout.FloatField("Terrain non-path Height", otherHeight);
-                heightmapResolution = EditorGUILayout.IntField("Heightmap Resolution", heightmapResolution);
-                heightmapResolution = Mathf.ClosestPowerOfTwo(heightmapResolution) + 1;
-                heightmapResolution = Mathf.Clamp(heightmapResolution, 33, 4097);
-                detailResolution = EditorGUILayout.IntField("Detail Resolution", detailResolution);
-                detailResolution = Mathf.ClosestPowerOfTwo(detailResolution);
-                detailResolution = Mathf.Clamp(detailResolution, 0, 4096);
-                detailResolutionPerPatch = EditorGUILayout.IntField("Detail Resolution Per Patch", detailResolutionPerPatch);
-                detailResolutionPerPatch = Mathf.ClosestPowerOfTwo(detailResolutionPerPatch);
-                detailResolutionPerPatch = Mathf.Clamp(detailResolutionPerPatch, 8, 128);
-
-
-                EditorGUILayout.BeginHorizontal();
-                heightmapSmoothing = EditorGUILayout.Toggle("Smooth heightmap", heightmapSmoothing);
-                EditorGUILayout.EndHorizontal();
-                if (heightmapSmoothing)
+                if (GUILayout.Button(displayTextures[i, j], "Label")) 
                 {
-                    gaussBlurRadius = EditorGUILayout.IntField("Radius of smooth", gaussBlurRadius);
-                    gaussBlurRadius = Mathf.Clamp(gaussBlurRadius, 0, heightmapResolution);
-                    gaussBlurPass = EditorGUILayout.IntField("Smooth passes", gaussBlurPass);
-                    gaussBlurPass = Mathf.Clamp(gaussBlurPass, 0, 10);
-                }
-            }
-
-            if (textureTiles)
-            {
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.LabelField("Options for texturing");
-                sampled = EditorGUILayout.Toggle("Sample bezier curve", sampled);
-                baseTextureResolution = EditorGUILayout.IntField("Base Texture Reolution", baseTextureResolution);
-                baseTextureResolution = Mathf.ClosestPowerOfTwo(baseTextureResolution);
-                baseTextureResolution = Mathf.Clamp(baseTextureResolution, 16, 2048);
-                EditorGUILayout.BeginHorizontal();
-                if (heightmapBasedPath)
-                {
-                    texturesBasedOnHeightmap = EditorGUILayout.Toggle("Texture based on heightmap", texturesBasedOnHeightmap);
-                    if (texturesBasedOnHeightmap) texturesBasedOnPath = false;
-                }
-                texturesBasedOnPath = EditorGUILayout.Toggle("Texturing based on path", texturesBasedOnPath);
-                if (texturesBasedOnPath) texturesBasedOnHeightmap = false;
-                EditorGUILayout.EndHorizontal();
-
-                for (int i = 0; i < textures.Length; i++)
-                {
-                    textures[i] = (Texture2D)EditorGUILayout.ObjectField("Texture " + i, textures[i], typeof(Texture), true);
-                    if (!texturesBasedOnHeightmap && !texturesBasedOnPath)
-                    {
-                        textureProportion[i] = EditorGUILayout.FloatField("Proportion of texture " + i, textureProportion[i]);
-                        textureProportion[i] = Mathf.Clamp01(textureProportion[i]);
-                    }
-                    else if (texturesBasedOnHeightmap)
-                    {
-                        textureHeight[i] = EditorGUILayout.FloatField("Height for texture " + i, textureHeight[i]);
-                    }
-                    else if (texturesBasedOnPath)
-                    {
-                        textureOnPath[i] = EditorGUILayout.Toggle("Texture for path", textureOnPath[i]);
-                        textureProportion[i] = EditorGUILayout.FloatField("Proportion of texture " + i + " on/off path", textureProportion[i]);
-                        textureProportion[i] = Mathf.Clamp01(textureProportion[i]);
-                    }
-                }
-                GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Add texture"))
-                {
-                    ArrayUtility.Add(ref textures, null);
-                    ArrayUtility.Add(ref textureProportion, 0);
-                    ArrayUtility.Add(ref textureHeight, 0);
-                    ArrayUtility.Add(ref textureOnPath, false);
-                }
-                if (GUILayout.Button("Remove texture"))
-                {
-                    if (textures.Length > 0) ArrayUtility.RemoveAt(ref textures, textures.Length - 1);
-                    if (textureProportion.Length > 0) ArrayUtility.RemoveAt(ref textureProportion, textureProportion.Length - 1);
-                    if (textureHeight.Length > 0) ArrayUtility.RemoveAt(ref textureHeight, textureHeight.Length - 1);
-                    if (textureOnPath.Length > 0) ArrayUtility.RemoveAt(ref textureOnPath, textureOnPath.Length - 1);
-                }
-                GUILayout.EndHorizontal();
-            }
-
-            if (objectsBasedPath)
-            {
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.Space();
-                EditorGUILayout.LabelField("Options for objects");
-                for (int i = 0; i < objectsOnPath.Length; i++)
-                {
-                    objectsOnPath[i] = (GameObject)EditorGUILayout.ObjectField("Object " + i, objectsOnPath[i], typeof(GameObject), true);
-                    objectOnPathIsTree[i] = EditorGUILayout.Toggle("Is a tree", objectOnPathIsTree[i]);
-                    objectOnPath[i] = EditorGUILayout.Toggle("Object lies on path", objectOnPath[i]);
-                    pToMakeObject[i] = EditorGUILayout.FloatField("% to make (recommend 0.001", pToMakeObject[i]);
-                    pToMakeObject[i] = Mathf.Clamp01(pToMakeObject[i]);
-                }
-                GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Add object"))
-                {
-                    ArrayUtility.Add(ref objectsOnPath, null);
-                    ArrayUtility.Add(ref objectOnPathIsTree, false);
-                    ArrayUtility.Add(ref objectOnPath, false);
-                    ArrayUtility.Add(ref pToMakeObject, 0);
-                }
-                if (GUILayout.Button("Remove object"))
-                {
-                    if (objectsOnPath.Length > 0) ArrayUtility.RemoveAt(ref objectsOnPath, objectsOnPath.Length - 1);
-                    if (objectOnPathIsTree.Length > 0) ArrayUtility.RemoveAt(ref objectOnPathIsTree, objectOnPathIsTree.Length - 1);
-                    if (objectOnPath.Length > 0) ArrayUtility.RemoveAt(ref objectOnPath, objectOnPath.Length - 1);
-                    if (pToMakeObject.Length > 0) ArrayUtility.RemoveAt(ref pToMakeObject, pToMakeObject.Length - 1);
-                }
-                GUILayout.EndHorizontal();
-            }
-
-            EditorGUILayout.Space();
-            EditorGUILayout.Space();
-            EditorGUILayout.Space();
-            EditorGUILayout.Space();
-            EditorGUILayout.Space();
-            EditorGUILayout.Space();
-            EditorGUILayout.Space();
-            EditorGUILayout.Space();
-            GUILayout.Label("Path were to save TerrainData:");
-            saveLocation = EditorGUILayout.TextField("Assets/", saveLocation);
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Generate all tiles")) {
-                if (ValidateBitVectors())
-                {
-                    tiles = new Tile[mazeHeight, mazeWidth];
-                    for (int r = 0; r < mazeHeight; r++)
-                    {
-                        for (int c = 0; c < mazeWidth; c++)
-                        {
-                            tiles[r, c] = new Tile(r, c, tileWidth, tileHeight, perTileDetail);
-                            tiles[r, c].setPathWidth(pathWidth);
-                        }
-                    }
-                    GenerateTiles();
-                    for (int r = 0; r < mazeHeight; r++)
-                    {
-                        for (int c = 0; c < mazeWidth; c++)
-                        {
-                            tiles[r, c].createSplatMap(textures, baseTextureResolution, sampled);
-                            tiles[r, c].createTile();
-                        }
-                    }
+                    selectedColumn = j;
+                    selectedRow = i;
                 }
             }
             GUILayout.EndHorizontal();
-        } 
-        else if (useCreatedTiles)
-        {
-
         }
+        GUILayout.EndVertical();
+        DropAreaGUI();
 
 
         GUILayout.EndScrollView();
     }
 
+    private bool ValidateSaveLocation()
+    {
+        if (saveLocation == string.Empty) saveLocation = "GeneratedMazeTiles/";
+        string pathToCheck = Application.dataPath + "/" + saveLocation + "/" + perTileDetail + "_" + numPossibleExits;
+        if (Directory.Exists(saveLocation) == false)
+        {
+            Directory.CreateDirectory(saveLocation);
+        }
+        if (Directory.Exists(pathToCheck) == false)
+        {
+            Directory.CreateDirectory(pathToCheck);
+        }
+        usingPath = saveLocation + "/" + perTileDetail + "_" + numPossibleExits;
+        return true;
+    }
     private bool ValidateBitVectors()
     {
         bool x = true;
         if (VEBPString.Length != mazeWidth * (mazeHeight - 1))
         {
-            Debug.Log("Bit vector doesn't match expected length based on maze width and height");
+            //Debug.Log("Bit vector doesn't match expected length based on maze width and height");
             x = false;
         }
         else if (HEBPString.Length != mazeHeight * (mazeWidth - 1))
         {
-            Debug.Log("Bit vector doesn't match expected length based on maze width and height");
+            //Debug.Log("Bit vector doesn't match expected length based on maze width and height");
             x = false;
         }
         else
@@ -368,7 +178,7 @@ public class TiledMazeGenerator : EditorWindow
                     VEBP[i] = int.Parse(a);
                 }
             }
-            for(int i = 0; i < HEBPString.Length; i++)
+            for (int i = 0; i < HEBPString.Length; i++)
             {
                 string a;
                 a = HEBPString.Substring(i, 1);
@@ -384,6 +194,24 @@ public class TiledMazeGenerator : EditorWindow
             }
         }
         return x;
+    }
+    private void updateArrays()
+    {
+        displayTextures = new Texture2D[mazeHeight, mazeWidth];
+        tiles = new Tile[mazeHeight, mazeWidth];
+        tiling = new int[mazeHeight, mazeWidth];
+        tilingFiles = new string[mazeHeight, mazeWidth];
+        for(int r = 0; r < mazeHeight; r++)
+        {
+            for(int c = 0; c < mazeWidth; c++)
+            {
+                displayTextures[r, c] = Texture2D.whiteTexture;
+                tiles[r, c] = new Tile();
+                tiles[r, c].setDetail(perTileDetail);
+                tiling[r, c] = 0;
+                tilingFiles[r, c] = "";
+            }
+        }
     }
     private int[,] createTilingFromEBP()
     {
@@ -513,240 +341,705 @@ public class TiledMazeGenerator : EditorWindow
                 tiles[r, c].setType(tilingMap[r, c]);
             }
         }
-
         return tilingMap;
     }
-    private void GenerateTiles()
-    {
-        int[,] tiling = createTilingFromEBP();        
-        int startx, starty;
-        bool cont = true;
-        if (tiles[(int)start.y, (int)start.x].getType() == BOT)
-        {
-            startx = Random.Range(1, perTileDetail - 1);
-            starty = perTileDetail - 1;
-            tiling[(int)start.y, (int)start.x] = THROUGH_VERTICAL;
-            tiles[(int)start.y, (int)start.x].setType(THROUGH_VERTICAL);
-        }
-        else if(tiles[(int)start.y, (int)start.x].getType() == TOP)
-        {
-            startx = Random.Range(1, perTileDetail - 1);
-            starty = 0;
-            tiles[(int)start.y, (int)start.x].setType(THROUGH_VERTICAL);
-        }
-        else if(tiles[(int)start.y, (int)start.x].getType() == RIGHT)
-        {
-            starty = Random.Range(1, perTileDetail - 1);
-            startx = 0;
-            tiles[(int)start.y, (int)start.x].setType(THROUGH_HORIZONTAL);
-        }
-        else if(tiles[(int)start.y, (int)start.x].getType() == LEFT)
-        {
-            starty = Random.Range(1, perTileDetail - 1);
-            startx = perTileDetail - 1;
-            tiles[(int)start.y, (int)start.x].setType(THROUGH_HORIZONTAL);
-        }
-        else
-        {
-            Debug.Log("Start point is invalid.");
-            cont = false;
-        }
 
-        if (tiles[(int)end.y, (int)end.x].getType() == BOT)
-        {
-            tiles[(int)end.y, (int)end.x].setType(THROUGH_VERTICAL);
+    private void loadTile(string s)
+    {
+        s = Application.dataPath + "/" + usingPath + "/" + s + ".txt";
+        int t = tiles[selectedRow, selectedColumn].getType();
+        if (t == TOP && s.Contains("End"))
+        {            
+            int[,] p = getPathFromFile(s);
+            tiles[selectedRow, selectedColumn].setPath(p);
+            tiles[selectedRow, selectedColumn].setComplete(true);
         }
-        else if (tiles[(int)end.y, (int)end.x].getType() == TOP)
+        if (t == LEFT && s.Contains("End"))
         {
-            tiles[(int)end.y, (int)end.x].setType(THROUGH_VERTICAL);
+            int[,] p = getPathFromFile(s);
+            tiles[selectedRow, selectedColumn].setPath(p);
+            tiles[selectedRow, selectedColumn].setComplete(true);
         }
-        else if (tiles[(int)end.y, (int)end.x].getType() == RIGHT)
+        if (t == RIGHT && s.Contains("End"))
         {
-            tiles[(int)end.y, (int)end.x].setType(THROUGH_HORIZONTAL);
+            int[,] p = getPathFromFile(s);
+            tiles[selectedRow, selectedColumn].setPath(p);
+            tiles[selectedRow, selectedColumn].setComplete(true);
         }
-        else if (tiles[(int)end.y, (int)end.x].getType() == LEFT)
+        if (t == BOT && s.Contains("End"))
         {
-            tiles[(int)end.y, (int)end.x].setType(THROUGH_HORIZONTAL);
+            int[,] p = getPathFromFile(s);
+            tiles[selectedRow, selectedColumn].setPath(p);
+            tiles[selectedRow, selectedColumn].setComplete(true);
+        }
+        else if (t == BOT_LEFT  && s.Contains("L"))
+        {
+            int[,] p = getPathFromFile(s);
+            tiles[selectedRow, selectedColumn].setPath(p);
+            tiles[selectedRow, selectedColumn].setComplete(true);
+        }
+        else if (t == BOT_RIGHT && s.Contains("L"))
+        {
+            int[,] p = getPathFromFile(s);
+            tiles[selectedRow, selectedColumn].setPath(p);
+            tiles[selectedRow, selectedColumn].setComplete(true);
+        }
+        else if (t == TOP_LEFT && s.Contains("L"))
+        {
+            int[,] p = getPathFromFile(s);
+            tiles[selectedRow, selectedColumn].setPath(p);
+            tiles[selectedRow, selectedColumn].setComplete(true);
+        }
+        else if (t == TOP_RIGHT && s.Contains("L"))
+        {
+            int[,] p = getPathFromFile(s);
+            tiles[selectedRow, selectedColumn].setPath(p);
+            tiles[selectedRow, selectedColumn].setComplete(true);
+        }
+        else if(t == THROUGH_HORIZONTAL && s.Contains("Through"))
+        {
+            int[,] p = getPathFromFile(s);
+            tiles[selectedRow, selectedColumn].setPath(p);
+            tiles[selectedRow, selectedColumn].setComplete(true);
+        }
+        else if (t == THROUGH_VERTICAL && s.Contains("Through"))
+        {
+            int[,] p = getPathFromFile(s);
+            tiles[selectedRow, selectedColumn].setPath(p);
+            tiles[selectedRow, selectedColumn].setComplete(true);
+        }
+        else if (t == LEFT_T  && s.Contains("T"))
+        {
+            int[,] p = getPathFromFile(s);
+            tiles[selectedRow, selectedColumn].setPath(p);
+            tiles[selectedRow, selectedColumn].setComplete(true);
+        }
+        else if (t == RIGHT_T && s.Contains("T"))
+        {
+            int[,] p = getPathFromFile(s);
+            tiles[selectedRow, selectedColumn].setPath(p);
+            tiles[selectedRow, selectedColumn].setComplete(true);
+        }
+        else if (t == TOP_T && s.Contains("T"))
+        {
+            int[,] p = getPathFromFile(s);
+            tiles[selectedRow, selectedColumn].setPath(p);
+            tiles[selectedRow, selectedColumn].setComplete(true);
+        }
+        else if (t == BOT_T && s.Contains("T"))
+        {
+            int[,] p = getPathFromFile(s);
+            tiles[selectedRow, selectedColumn].setPath(p);
+            tiles[selectedRow, selectedColumn].setComplete(true);
+        }
+        else if(t == CROSS && s.Contains("Cross"))
+        {
+            int[,] p = getPathFromFile(s);
+            tiles[selectedRow, selectedColumn].setPath(p);
+            tiles[selectedRow, selectedColumn].setComplete(true);
         }
         else
         {
-            Debug.Log("End point is invalid.");
-            cont = false;
+            Debug.Log("Invalid input for selected tile");
         }
-        if (cont)
-        {
-            GenerateTile2((int)start.y, (int)start.x);
-        }
+        updateDisplayTexture(selectedRow, selectedColumn);
     }
-    private void GenerateTile2(int r, int c)
+    private void randomizeTiles()
     {
-        if(r < 0 || r >= mazeHeight || c < 0 || c >= mazeWidth || tiles[r, c].isCreated())
+        usingPath = saveLocation + "/" + perTileDetail + "_" + numPossibleExits;
+        for (int i = 0; i < mazeHeight; i++)
         {
-            return;
-        }
-        int leftx = 0, rightx = perTileDetail - 1, topx, botx, lefty, righty, topy = perTileDetail - 1, boty = 0, midx = Random.Range(1, perTileDetail - 1), midy = Random.Range(1, perTileDetail - 1);
-        if(r > 0 && tiles[r-1, c].isCreated() && tiles[r-1, c].hasBotEntrance())
-        {
-            Vector2 top = tiles[r - 1, c].getBotEntrance();
-            topx = (int)top.x;
-        }
-        else
-        {
-            topx = Random.Range(1, perTileDetail - 1);
-        }
-        if(r < mazeHeight - 1 && tiles[r+1, c].isCreated() && tiles[r+1, c].hasTopEntrance())
-        {
-            Vector2 bot = tiles[r + 1, c].getTopEntrance();
-            botx = (int)bot.x;
-        }
-        else
-        {
-            botx = Random.Range(1, perTileDetail - 1);
-        }
-        if(c > 0 && tiles[r, c-1].isCreated() && tiles[r, c - 1].hasRightEntrance())
-        {
-            Vector2 left = tiles[r, c - 1].getRightEntrance();
-            lefty = (int)left.y;
-        }
-        else
-        {
-            lefty = Random.Range(1, perTileDetail - 1);
-        }
-        if(c < mazeWidth - 1 && tiles[r, c+1].isCreated() && tiles[r, c + 1].hasLeftEntrance())
-        {
-            Vector2 right = tiles[r, c + 1].getLeftEntrance();
-            righty = (int)right.y;
-        }
-        else
-        {
-            righty = Random.Range(1, perTileDetail - 1);
+            for(int j = 0; j < mazeWidth; j++)
+            {
+                tiles[i, j].setPath(new int[perTileDetail, perTileDetail]);
+            }
         }
 
-        switch(tiles[r, c].getType())
+        float startingSpot = (float)(perTileDetail - 2) / (float)numPossibleExits;
+        exits = new List<int>();
+        for (int i = 1; i <= (numPossibleExits / 2); i++)
+        {
+            exits.Add((int)(i * startingSpot));
+        }
+        int length = exits.Count;
+        if (numPossibleExits % 2 != 0)
+        {
+            exits.Add(perTileDetail / 2);
+        }
+        for (int i = length - 1; i >= 0; i--)
+        {
+            exits.Add(perTileDetail - 1 - exits[i]);
+        }
+
+        tiling = createTilingFromEBP();
+        for (int i = 0; i < mazeHeight; i++)
+        {
+            for (int j = 0; j < mazeWidth; j++)
+            {
+                tiles[i, j].setComplete(false);
+            }
+        }
+        int[,] p = new int[perTileDetail, perTileDetail];
+        string[] possibleFiles = new string[1];
+        chooseTile(0, 0);
+    }
+    private int[,] getPathFromFile(string s)
+    {
+        int[,] p = new int[perTileDetail, perTileDetail];
+        
+        StreamReader r = new StreamReader(s);
+        string stringPath = r.ReadToEnd();
+        for(int i = 0; i < perTileDetail; i++)
+        {
+            for(int j = 0; j < perTileDetail; j++)
+            {
+                p[i, j] = int.Parse(stringPath.Substring(i * perTileDetail + j, 1));
+            }
+        }
+        return p;
+    }
+    private int[,] rotateClockwise(int[,] p)
+    {
+        int[,] rotated = new int[perTileDetail, perTileDetail];
+        for(int i = 0; i < perTileDetail; ++i)
+        {
+            for(int j = 0; j < perTileDetail; ++j)
+            {
+                rotated[i, j] = p[perTileDetail - j - 1, i];
+            }
+        }
+        return rotated;
+    }
+
+    private void chooseTile(int r, int c)
+    {
+        if (r < 0 || r == mazeHeight || c < 0 || c == mazeWidth || tiles[r, c].isCreated()) return;
+        
+        string con = "";
+        int lefty, righty, topx, botx;
+        int[,] p = new int[perTileDetail, perTileDetail];
+        string[] possibleFiles = new string[1];
+        switch (tiles[r, c].getType())
         {
             case EMPTY:
                 break;
             case LEFT:
-                tiles[r, c].generatePath(leftx, lefty, midx, midy);
-                tiles[r, c].setRightEntrance(new Vector2(leftx, lefty));
-                GenerateTile2(r, c - 1);
+                if (tiles[r, c - 1].hasRightEntrance())
+                {
+                    lefty = (int)tiles[r, c - 1].getRightEntrance().y;
+                    con = "_" + lefty + "_?";
+                }
+                else
+                {
+                    con = "_?_?";
+                }
+                possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "EndDetail" + perTileDetail + con + ".txt");
+                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                tiles[r, c].setPath(p);
+                tiles[r, c].setComplete(true);
+                chooseTile(r, c - 1);
                 break;
             case RIGHT:
-                tiles[r, c].generatePath(rightx, righty, midx, midy);
-                tiles[r, c].setLeftEntrance(new Vector2(rightx, righty));
-                GenerateTile2(r, c + 1);
+                if (tiles[r, c + 1].hasLeftEntrance())
+                {
+                    righty = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r, c + 1].getLeftEntrance().y)];
+                    con = "_" + righty + "_?";
+                }
+                else
+                {
+                    con = "_?_?";
+                }
+                possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "EndDetail" + perTileDetail + con + ".txt");
+                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                p = rotateClockwise(p);
+                p = rotateClockwise(p);
+                tiles[r, c].setPath(p);
+                tiles[r, c].setComplete(true);
+                chooseTile(r, c + 1);
                 break;
             case TOP:
-                tiles[r, c].generatePath(topx, topy, midx, midy);
-                tiles[r, c].setBotEntrance(new Vector2(topx, topy));
-                GenerateTile2(r - 1, c);
+                if (tiles[r - 1, c].hasBotEntrance())
+                {
+                    topx = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r - 1, c].getBotEntrance().x)];
+                    con = "_" + topx + "_?";
+                }
+                else
+                {
+                    con = "_?_?";
+                }
+
+                possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "EndDetail" + perTileDetail + con + ".txt");
+                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                p = rotateClockwise(p);
+                tiles[r, c].setPath(p);
+                tiles[r, c].setComplete(true);
+                chooseTile(r - 1, c);
                 break;
             case BOT:
-                tiles[r, c].generatePath(botx, boty, midx, midy);
-                tiles[r, c].setTopEntrance(new Vector2(botx, boty));
-                GenerateTile2(r + 1, c);
+                if (tiles[r + 1, c].hasTopEntrance())
+                {
+                    botx = (int)tiles[r + 1, c].getTopEntrance().x;
+                    con = "_" + botx + "_?";
+                }
+                else
+                {
+                    con = "_?_?";
+                }
+                possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "EndDetail" + perTileDetail + con + ".txt");
+                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                p = rotateClockwise(p);
+                p = rotateClockwise(p);
+                p = rotateClockwise(p);
+                tiles[r, c].setPath(p);
+                tiles[r, c].setComplete(true);
+                chooseTile(r + 1, c);
                 break;
             case THROUGH_HORIZONTAL:
-                tiles[r, c].generatePath(rightx, righty, leftx, lefty);
-                tiles[r, c].setRightEntrance(new Vector2(rightx, righty));
-                tiles[r, c].setLeftEntrance(new Vector2(leftx, lefty));
-                GenerateTile2(r, c - 1);
-                GenerateTile2(r, c + 1);
+                con = "";
+                if (tiles[r, c - 1].hasRightEntrance() && tiles[r, c + 1].hasLeftEntrance())
+                {
+                    righty = (int)tiles[r, c + 1].getLeftEntrance().y;
+                    lefty = (int)tiles[r, c - 1].getRightEntrance().y;
+                    con = "_" + righty + "_" + lefty + "_?";
+                }
+                else if (tiles[r, c - 1].hasRightEntrance())
+                {
+                    lefty = (int)tiles[r, c - 1].getRightEntrance().y;
+                    con = "_?_" + lefty + "_?";
+                }
+                else if (tiles[r, c + 1].hasLeftEntrance())
+                {
+                    righty = (int)tiles[r, c + 1].getLeftEntrance().y;
+                    con = "_" + righty + "_?_?";
+                }
+                else
+                {
+                    con = "_?_?_?";
+                }
+                possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "ThroughDetail" + perTileDetail + con + ".txt");
+                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                tiles[r, c].setPath(p);
+                tiles[r, c].setComplete(true);
+                chooseTile(r, c - 1);
+                chooseTile(r, c + 1);
                 break;
             case THROUGH_VERTICAL:
-                tiles[r, c].generatePath(topx, topy, botx, boty);
-                tiles[r, c].setTopEntrance(new Vector2(topx, topy));
-                tiles[r, c].setBotEntrance(new Vector2(botx, boty));
-                GenerateTile2(r - 1, c);
-                GenerateTile2(r + 1, c);
+                con = "";
+                if (tiles[r - 1, c].hasBotEntrance() && tiles[r + 1, c].hasTopEntrance())
+                {
+                    topx = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r - 1, c].getBotEntrance().x)];
+                    botx = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r + 1, c].getTopEntrance().x)];
+                    con = "_" + botx + "_" + topx + "_?";
+                }
+                else if (tiles[r + 1, c].hasTopEntrance())
+                {
+                    botx = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r + 1, c].getTopEntrance().x)];
+                    con = "_" + botx + "_?_?";
+                }
+                else if (tiles[r - 1, c].hasBotEntrance())
+                {
+                    topx = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r - 1, c].getBotEntrance().x)];
+                    con = "_?_" + topx + "_?";
+                }
+                else
+                {
+                    con = "_?_?_?";
+                }
+
+                possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "ThroughDetail" + perTileDetail + con + ".txt");
+                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                p = rotateClockwise(p);
+                tiles[r, c].setPath(p);
+                tiles[r, c].setComplete(true);
+                chooseTile(r - 1, c);
+                chooseTile(r + 1, c);
                 break;
             case BOT_LEFT:
-                tiles[r, c].generatePath(botx, boty, leftx, lefty);
-                tiles[r, c].setBotEntrance(new Vector2(botx, boty));
-                tiles[r, c].setLeftEntrance(new Vector2(leftx, lefty));
-                GenerateTile2(r, c - 1);
-                GenerateTile2(r + 1, c);
+                if (tiles[r + 1, c].hasTopEntrance() && tiles[r, c - 1].hasRightEntrance())
+                {
+                    botx = exits[exits.Count - exits.IndexOf((int)tiles[r + 1, c].getTopEntrance().x)];
+                    lefty = (int)tiles[r, c - 1].getRightEntrance().y;
+                    con = "_" + lefty + "_" + botx + "_?";
+                }
+                else if (tiles[r + 1, c].hasTopEntrance())
+                {
+                    botx = exits[exits.IndexOf((int)tiles[r + 1, c].getTopEntrance().x)];
+                    con = "_?_" + botx + "_?";
+                }
+                else if (tiles[r, c - 1].hasRightEntrance())
+                {
+                    lefty = perTileDetail - 1 - (int)tiles[r, c - 1].getRightEntrance().y;
+                    con = "_" + lefty + "_?_?";
+                }
+                else
+                {
+                    con = "_?_?_?";
+                }
+                possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "LDetail" + perTileDetail + con + ".txt");
+                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                p = rotateClockwise(p);
+                p = rotateClockwise(p);
+                p = rotateClockwise(p);
+                tiles[r, c].setPath(p);
+                tiles[r, c].setComplete(true);
+                chooseTile(r, c - 1);
+                chooseTile(r + 1, c);
                 break;
             case BOT_RIGHT:
-                tiles[r, c].generatePath(botx, boty, rightx, righty);
-                tiles[r, c].setBotEntrance(new Vector2(botx, boty));
-                tiles[r, c].setRightEntrance(new Vector2(rightx, righty));
-                GenerateTile2(r, c + 1);
-                GenerateTile2(r + 1, c);
+                if (tiles[r + 1, c].hasTopEntrance() && tiles[r, c + 1].hasLeftEntrance())
+                {
+                    botx = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r + 1, c].getTopEntrance().x)];
+                    righty = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r, c + 1].getLeftEntrance().y)];
+                    con = "_" + botx + "_" + righty + "_?";
+                }
+                else if (tiles[r + 1, c].hasTopEntrance())
+                {
+                    botx = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r + 1, c].getTopEntrance().x)];
+                    con = "_" + botx + "_?_?";
+                }
+                else if (tiles[r, c + 1].hasLeftEntrance())
+                {
+                    righty = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r, c + 1].getLeftEntrance().y)];
+                    con = "_?_" + righty + "_?";
+                }
+                else
+                {
+                    con = "_?_?_?";
+                }
+                possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "LDetail" + perTileDetail + con + ".txt");
+                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                p = rotateClockwise(p);
+                p = rotateClockwise(p);
+                tiles[r, c].setPath(p);
+                tiles[r, c].setComplete(true);
+                chooseTile(r, c + 1);
+                chooseTile(r + 1, c);
                 break;
             case TOP_RIGHT:
-                tiles[r, c].generatePath(topx, topy, rightx, righty);
-                tiles[r, c].setRightEntrance(new Vector2(rightx, righty));
-                tiles[r, c].setTopEntrance(new Vector2(topx, topy));
-                GenerateTile2(r, c + 1);
-                GenerateTile2(r - 1, c);
+                if (tiles[r - 1, c].hasBotEntrance() && tiles[r, c + 1].hasLeftEntrance())
+                {
+                    topx = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r - 1, c].getBotEntrance().x)];
+                    righty = (int)tiles[r, c + 1].getLeftEntrance().y;
+                    con = "_" + righty + "_" + topx + "_?";
+                }
+                else if (tiles[r - 1, c].hasBotEntrance())
+                {
+                    topx = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r - 1, c].getBotEntrance().x)];
+                    con = "_?_" + topx + "_?";
+                }
+                else if (tiles[r, c + 1].hasLeftEntrance())
+                {
+                    righty = (int)tiles[r, c + 1].getLeftEntrance().y;
+                    con = "_" + righty + "_?_?";
+                }
+                else
+                {
+                    con = "_?_?_?";
+                }
+                possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "LDetail" + perTileDetail + con + ".txt");
+                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                p = rotateClockwise(p);
+                tiles[r, c].setPath(p);
+                tiles[r, c].setComplete(true);
+                chooseTile(r, c + 1);
+                chooseTile(r - 1, c);
                 break;
             case TOP_LEFT:
-                tiles[r, c].generatePath(topx, topy, leftx, lefty);
-                tiles[r, c].setTopEntrance(new Vector2(topx, topy));
-                tiles[r, c].setLeftEntrance(new Vector2(leftx, lefty));
-                GenerateTile2(r, c - 1);
-                GenerateTile2(r - 1, c);
+                if (tiles[r - 1, c].hasBotEntrance() && tiles[r, c - 1].hasRightEntrance())
+                {
+                    topx = (int)tiles[r - 1, c].getBotEntrance().x;
+                    lefty = (int)tiles[r, c - 1].getRightEntrance().y;
+                    con = "_" + topx + "_" + lefty + "_?";
+                }
+                else if (tiles[r - 1, c].hasBotEntrance())
+                {
+                    topx = (int)tiles[r - 1, c].getBotEntrance().x;
+                    con = "_" + topx + "_?_?";
+                }
+                else if (tiles[r, c - 1].hasRightEntrance())
+                {
+                    lefty = (int)tiles[r, c - 1].getRightEntrance().y;
+                    con = "_?_" + lefty + "_?";
+                }
+                else
+                {
+                    con = "_?_?_?";
+                }
+                possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "LDetail" + perTileDetail + con + ".txt");
+                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                tiles[r, c].setPath(p);
+                tiles[r, c].setComplete(true);
+                chooseTile(r, c - 1);
+                chooseTile(r - 1, c);
                 break;
             case LEFT_T:
-                tiles[r, c].generatePath(leftx, lefty, midx, midy);
-                tiles[r, c].adjoinPath(topx, topy);
-                tiles[r, c].adjoinPath(botx, boty);
-                tiles[r, c].setLeftEntrance(new Vector2(leftx, lefty));
-                tiles[r, c].setBotEntrance(new Vector2(botx, boty));
-                tiles[r, c].setTopEntrance(new Vector2(topx, topy));
-                GenerateTile2(r, c - 1);
-                GenerateTile2(r - 1, c);
-                GenerateTile2(r + 1, c);
+                if (tiles[r, c - 1].hasRightEntrance())
+                {
+                    lefty = (int)tiles[r, c - 1].getRightEntrance().y;
+                    con += "_" + lefty;
+                }
+                else
+                {
+                    con += "_?";
+                }
+
+                if (tiles[r + 1, c].hasTopEntrance())
+                {
+                    botx = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r + 1, c].getTopEntrance().x)];
+                    con += "_" + botx;
+                }
+                else
+                {
+                    con += "_?";
+                }
+
+                if (tiles[r - 1, c].hasBotEntrance())
+                {
+                    topx = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r - 1, c].getBotEntrance().x)];
+                    con += "_" + topx;
+                }
+                else
+                {
+                    con += "_?";
+                }
+                                
+                con += "_?";
+                possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "TDetail" + perTileDetail + con + ".txt");
+                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                p = rotateClockwise(p);
+                tiles[r, c].setPath(p);
+                tiles[r, c].setComplete(true);
+                chooseTile(r - 1, c);
+                chooseTile(r + 1, c);
+                chooseTile(r, c - 1);
                 break;
             case RIGHT_T:
-                tiles[r, c].generatePath(rightx, righty, midx, midy);
-                tiles[r, c].adjoinPath(topx, topy);
-                tiles[r, c].adjoinPath(botx, boty);
-                tiles[r, c].setBotEntrance(new Vector2(botx, boty));
-                tiles[r, c].setTopEntrance(new Vector2(topx, topy));
-                tiles[r, c].setRightEntrance(new Vector2(rightx, righty));
-                GenerateTile2(r, c + 1);
-                GenerateTile2(r - 1, c);
-                GenerateTile2(r + 1, c);
+
+                if (tiles[r, c + 1].hasLeftEntrance())
+                {
+                    righty = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r, c + 1].getLeftEntrance().y)];
+                    con += "_" + righty;
+                }
+                else
+                {
+                    con += "_?";
+                }
+                if (tiles[r - 1, c].hasBotEntrance())
+                {
+                    topx = (int)tiles[r - 1, c].getBotEntrance().x;
+                    con += "_" + topx;
+                }
+                else
+                {
+                    con += "_?";
+                }
+                
+                if (tiles[r + 1, c].hasTopEntrance())
+                {
+                    botx = (int)tiles[r + 1, c].getTopEntrance().x;
+                    con += "_" + botx;
+                }
+                else
+                {
+                    con += "_?";
+                }
+                
+                con += "_?";
+                possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "TDetail" + perTileDetail + con + ".txt");
+                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                p = rotateClockwise(p);
+                p = rotateClockwise(p);
+                p = rotateClockwise(p);
+                tiles[r, c].setPath(p);
+                tiles[r, c].setComplete(true);
+                chooseTile(r - 1, c);
+                chooseTile(r + 1, c);
+                chooseTile(r, c + 1);
                 break;
             case TOP_T:
-                tiles[r, c].generatePath(topx, topy, midx, midy);
-                tiles[r, c].adjoinPath(leftx, lefty);
-                tiles[r, c].adjoinPath(rightx, righty);
-                tiles[r, c].setTopEntrance(new Vector2(topx, topy));
-                tiles[r, c].setLeftEntrance(new Vector2(leftx, lefty));
-                tiles[r, c].setRightEntrance(new Vector2(rightx, righty));
-                GenerateTile2(r, c - 1);
-                GenerateTile2(r, c + 1);
-                GenerateTile2(r - 1, c);
+                if (tiles[r - 1, c].hasBotEntrance())
+                {
+                    topx = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r - 1, c].getBotEntrance().x)];
+                    con += "_" + topx;
+                }
+                else
+                {
+                    con += "_?";
+                }
+                if (tiles[r, c - 1].hasRightEntrance())
+                {
+                    lefty = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r, c - 1].getRightEntrance().y)];
+                    con += "_" + lefty;
+                }
+                else
+                {
+                    con += "_?";
+                }
+                if (tiles[r, c + 1].hasLeftEntrance())
+                {
+                    righty = exits[exits.Count - 1 - exits.IndexOf((int)tiles[r, c + 1].getLeftEntrance().y)];
+                    con += "_" + righty;
+                }
+                else
+                {
+                    con += "_?";
+                }
+                con += "_?";
+                possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "TDetail" + perTileDetail + con + ".txt");
+                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                p = rotateClockwise(p);
+                p = rotateClockwise(p);
+                tiles[r, c].setPath(p);
+                tiles[r, c].setComplete(true);
+                chooseTile(r - 1, c);
+                chooseTile(r, c + 1);
+                chooseTile(r, c - 1);
                 break;
             case BOT_T:
-                tiles[r, c].generatePath(botx, boty, midx, midy);
-                tiles[r, c].adjoinPath(leftx, lefty);
-                tiles[r, c].adjoinPath(rightx, righty);
-                tiles[r, c].setBotEntrance(new Vector2(botx, boty));
-                tiles[r, c].setLeftEntrance(new Vector2(leftx, lefty));
-                tiles[r, c].setRightEntrance(new Vector2(rightx, righty));
-                GenerateTile2(r, c - 1);
-                GenerateTile2(r, c + 1);
-                GenerateTile2(r + 1, c);
+                if (tiles[r + 1, c].hasTopEntrance())
+                {
+                    botx = (int)tiles[r + 1, c].getTopEntrance().x;
+                    con += "_" + botx;
+                }
+                else
+                {
+                    con += "_?";
+                }
+                if (tiles[r, c + 1].hasLeftEntrance())
+                {
+                    righty = (int)tiles[r, c + 1].getLeftEntrance().y;
+                    con += "_" + righty;
+                }
+                else
+                {
+                    con += "_?";
+                }
+                if (tiles[r, c - 1].hasRightEntrance())
+                {
+                    lefty = (int)tiles[r, c - 1].getRightEntrance().y;
+                    con += "_" + lefty;
+                }
+                else
+                {
+                    con += "_?";
+                }
+                con += "_?";
+                possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "TDetail" + perTileDetail + con + ".txt");
+                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                tiles[r, c].setPath(p);
+                tiles[r, c].setComplete(true);
+                chooseTile(r + 1, c);
+                chooseTile(r, c + 1);
+                chooseTile(r, c - 1);
                 break;
             case CROSS:
-                tiles[r, c].generatePath(topx, topy, midx, midy);
-                tiles[r, c].adjoinPath(botx, boty);
-                tiles[r, c].adjoinPath(leftx, lefty);
-                tiles[r, c].adjoinPath(rightx, righty);
-                tiles[r, c].setBotEntrance(new Vector2(botx, boty));
-                tiles[r, c].setTopEntrance(new Vector2(topx, topy));
-                tiles[r, c].setLeftEntrance(new Vector2(leftx, lefty));
-                tiles[r, c].setRightEntrance(new Vector2(rightx, righty));
-                GenerateTile2(r, c - 1);
-                GenerateTile2(r, c + 1);
-                GenerateTile2(r - 1, c);
-                GenerateTile2(r + 1, c);
+                if (tiles[r + 1, c].hasTopEntrance())
+                {
+                    botx = (int)tiles[r + 1, c].getTopEntrance().x;
+                    con += "_" + botx;
+                }
+                else
+                {
+                    con += "_?";
+                }                
+                if (tiles[r, c + 1].hasLeftEntrance())
+                {
+                    righty = (int)tiles[r, c + 1].getLeftEntrance().y;
+                    con += "_" + righty;
+                }
+                else
+                {
+                    con += "_?";
+                }
+                if (tiles[r - 1, c].hasBotEntrance())
+                {
+                    topx = (int)tiles[r - 1, c].getBotEntrance().x;
+                    con += "_" + topx;
+                }
+                else
+                {
+                    con += "_?";
+                }
+                if (tiles[r, c - 1].hasRightEntrance())
+                {
+                    lefty = (int)tiles[r, c - 1].getRightEntrance().y;
+                    con += "_" + lefty;
+                }
+                else
+                {
+                    con += "_?";
+                }
+                con += "_?";
+                possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "CrossDetail" + perTileDetail + con + ".txt");
+                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                tiles[r, c].setPath(p);
+                tiles[r, c].setComplete(true);
+                chooseTile(r - 1, c);
+                chooseTile(r + 1, c);
+                chooseTile(r, c + 1);
+                chooseTile(r, c - 1);
                 break;
             default:
+                break;
+        }
+        updateDisplayTexture(r, c);
+    }
+    private void updateDisplayTexture(int r, int c)
+    {
+        int scalar = 75 / perTileDetail;
+        Texture2D temp = new Texture2D(perTileDetail * scalar, perTileDetail * scalar, TextureFormat.ARGB32, false);
+        for(int i = 0; i < perTileDetail; i++)
+        {
+            for(int j = 0; j < perTileDetail; j++)
+            {
+                for (int k = 0; k < scalar; k++)
+                {
+                    for(int l = 0; l < scalar; l++)
+                    {
+                        if (tiles[r, c].getPath()[i, j] == 0)
+                        {
+                            temp.SetPixel(j * scalar + k, (scalar * perTileDetail) - (i * scalar + l) - 1, Color.black);
+                        }
+                        else
+                        {
+                            temp.SetPixel(j * scalar + k, (scalar * perTileDetail) - (i * scalar + l) - 1, Color.red);
+                        }
+                    }
+                }                
+            }
+        }
+        
+        temp.Apply();
+        displayTextures[r, c] = temp;
+        displayTextures[r, c].Apply();
+    }
+    public void DropAreaGUI()
+    {
+        Event evt = Event.current;
+        Rect drop_area = GUILayoutUtility.GetRect(0.0f, 50.0f, GUILayout.ExpandWidth(true));
+        GUI.Box(drop_area, "Drop requested tile for row " + selectedRow + " column " + selectedColumn + " here");
+
+        switch (evt.type)
+        {
+            case EventType.DragUpdated:
+            case EventType.DragPerform:
+                if (!drop_area.Contains(evt.mousePosition))
+                    return;
+
+                DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
+
+                if (evt.type == EventType.DragPerform)
+                {
+                    DragAndDrop.AcceptDrag();
+
+                    foreach (Object dragged_object in DragAndDrop.objectReferences)
+                    {
+                        if (ValidateBitVectors())
+                        {
+                            loadTile(dragged_object.name);
+                        }
+                    }
+                }
                 break;
         }
     }
