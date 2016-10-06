@@ -32,6 +32,7 @@ namespace Assets.Scripts.Editor
         private TerrainData terrainData;
         private Vector2 leftEntrance, rightEntrance, topEntrance, botEntrance;
         private string name;
+        private string fileName;
         private int[,] path;
         private List<List<Vector2>> paths;
         private List<Vector2> controlPoints;
@@ -77,6 +78,7 @@ namespace Assets.Scripts.Editor
         public bool isCreated() { return completed; }
         public int getRow() { return row; }
         public int getCol() { return column; }
+        public string getFileName() { return fileName; }
         public int getDetail() { return tileDetail; }
         public int getType() { return tileType; }
         public bool hasLeftEntrance() { return !(leftEntrance.x == 0 && leftEntrance.y == 0); }
@@ -117,6 +119,7 @@ namespace Assets.Scripts.Editor
         public void setWidth(float f) { width = f; }
         public void setHeight(float f) { height = f; }
         public void setPathWidth(float p) { pathWidth = p; }
+        public void setFileName(string s) { fileName = s; }
         public void setName(string n) { name = n; }
         public void setRightEntrance(Vector2 location) { rightEntrance = location; }
         public void setLeftEntrance(Vector2 location) { leftEntrance = location; }
@@ -382,7 +385,6 @@ namespace Assets.Scripts.Editor
 
             return p;
         }
-
 
         public void generatePath(int startx, int starty, int endx, int endy)
         {
@@ -661,26 +663,10 @@ namespace Assets.Scripts.Editor
 
             return alive;
         }
-
-        public void saveTileArray(string l)
-        {
-            FileStream file = File.Create(Application.dataPath + "/" + l + "/" + name + ".tile");    
-            
-            for (int i = 0; i < path.GetLength(0); i++)
-            {
-                for(int j = 0; j < path.GetLength(1); j++)
-                {
-                    file.WriteByte((byte)path[i, j]);
-                }
-            }            
-            file.Close();            
-        }
-        public void loadTileArray(string l)
-        {
-
-        }
+        
         public void loadPathsFromPath()
         {
+            paths = new List<List<Vector2>>();
             Vector2 start = new Vector2(0, 0);
             List<Vector2> intersections = new List<Vector2>();
             for(int y = 0; y < tileDetail; y++)
@@ -727,14 +713,14 @@ namespace Assets.Scripts.Editor
                     }
                     if (y - 1 >= 0 && pCopy[y-1, x] == 1)
                     {
-                        List<Vector2> subWalk = createPath(pCopy, x + 1, y - 1);
+                        List<Vector2> subWalk = createPath(pCopy, x, y - 1);
                         pCopy[y-1, x] = 0;
                         subWalk.Insert(0, new Vector2(x, y));
                         paths.Add(subWalk);
                     }
                     if (y + 1 < tileDetail && pCopy[y+1, x] == 1)
                     {
-                        List<Vector2> subWalk = createPath(pCopy, x , y + 1);
+                        List<Vector2> subWalk = createPath(pCopy, x, y + 1);
                         pCopy[y+1, x] = 0;
                         subWalk.Insert(0, new Vector2(x, y));
                         paths.Add(subWalk);
@@ -768,6 +754,7 @@ namespace Assets.Scripts.Editor
         }
         public void createSplatMap(Texture2D[] textures, int textureResolution, bool sampled)
         {
+            
             terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath("Assets/" + name + ".asset", typeof(TerrainData));
             terrainData.baseMapResolution = textureResolution;
             terrainData.alphamapResolution = textureResolution;
@@ -796,7 +783,19 @@ namespace Assets.Scripts.Editor
 
                 if (sampled && paths[j].Count > 3)
                 {
-                    SamplePoints(paths[j], 10, 1000, 0.33f);
+                    while(paths[j].Count % 4 != 0)
+                    {
+                        paths[j].Add(paths[j][paths[j].Count-1]);
+                    }
+
+                    for(int q = 3; q < paths[j].Count - 2; q+=2)
+                    {
+                        paths[j].Insert(q, new Vector2((paths[j][q].x + paths[j][q - 1].x) / 2, (paths[j][q].y + paths[j][q - 1].y) / 2));
+                        q++;
+                    }
+                    
+                    controlPoints = paths[j];
+                    curveCount = (controlPoints.Count - 1) / 3;
                 }
                 else
                 {
@@ -835,6 +834,10 @@ namespace Assets.Scripts.Editor
             terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath("Assets/" + name + ".asset", typeof(TerrainData));
             terrainData.size = new Vector3(width, 1, height);
             terrainData.name = name;
+            if (GameObject.Find(name))
+            {
+                GameObject.DestroyImmediate(GameObject.Find(name));
+            }
             GameObject terrain = Terrain.CreateTerrainGameObject(terrainData);
             terrain.name = name;
             terrain.transform.position = new Vector3(column * width, 0, row * -height);

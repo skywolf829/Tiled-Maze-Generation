@@ -137,10 +137,6 @@ public class TilePathGenerator : MonoBehaviour {
 
 
     }
-    private void generateTileArray(int numExits)
-    {
-
-    }
     public int[,] generatePath(int[,] path, int startx, int starty, int endx, int endy)
     {
         Stack<int[,]> pathArrays = new Stack<int[,]>();

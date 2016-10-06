@@ -46,6 +46,7 @@ public class TiledMazeGenerator : EditorWindow
     private string usingPath = "/GeneratedMazeTiles/5_2/"; 
     private int perTileDetail = 5;
     private int numPossibleExits = 2;
+    private int maxNumTilesPerType = 3;
 
     private float tileWidth = 10;
     private float tileHeight = 10;
@@ -87,7 +88,7 @@ public class TiledMazeGenerator : EditorWindow
             updateArrays();
         }
         numPossibleExits = Mathf.Clamp(EditorGUILayout.IntField("Possible exits", numPossibleExits), 1, (perTileDetail - 2));
-
+        maxNumTilesPerType = Mathf.Clamp(EditorGUILayout.IntField("Number of tiles per exit combination", maxNumTilesPerType), 1, 10);
         if (GUILayout.Button("Generate all tiles")) {
             if (ValidateSaveLocation())
             {                     
@@ -95,6 +96,7 @@ public class TiledMazeGenerator : EditorWindow
                 tpg.setDetail(perTileDetail);
                 tpg.setSaveLocation(saveLocation);
                 tpg.setNumPossibleExits(numPossibleExits);
+                tpg.setMaxNumTilesPerType(maxNumTilesPerType);
                 tpg.beginGenerator();
             }
         }
@@ -129,6 +131,15 @@ public class TiledMazeGenerator : EditorWindow
                 {
                     selectedColumn = j;
                     selectedRow = i;
+                    string s = tiles[selectedRow, selectedColumn].getFileName();
+                    s = s.Substring(s.LastIndexOf('\\') + 1);
+                    if (s.Contains("/"))
+                    {
+                        s = s.Substring(s.LastIndexOf('/') + 1);
+                    }
+                    int x = int.Parse(s.Substring(s.Length - 5, 1));                    
+                    s = s.Substring(0, s.Length - 5) + (x+1) % maxNumTilesPerType;
+                    loadTile(s);
                 }
             }
             GUILayout.EndHorizontal();
@@ -151,7 +162,7 @@ public class TiledMazeGenerator : EditorWindow
                     tiles[i, j].setPathWidth(pathWidth);
                     tiles[i, j].setWidth(tileWidth);
                     tiles[i, j].setHeight(tileHeight);
-                    tiles[i, j].createSplatMap(textures, baseTextureResolution, sampled);
+                    if(textures.Length > 0) tiles[i, j].createSplatMap(textures, baseTextureResolution, sampled);
                     tiles[i, j].createTile();
                 }
             }
@@ -163,7 +174,7 @@ public class TiledMazeGenerator : EditorWindow
             tiles[selectedRow, selectedColumn].setPathWidth(pathWidth);
             tiles[selectedRow, selectedColumn].setWidth(tileWidth);
             tiles[selectedRow, selectedColumn].setHeight(tileHeight);
-            tiles[selectedRow, selectedColumn].createSplatMap(textures, baseTextureResolution, sampled);
+            if (textures.Length > 0) tiles[selectedRow, selectedColumn].createSplatMap(textures, baseTextureResolution, sampled);
             tiles[selectedRow, selectedColumn].createTile();
                 
         }
@@ -389,6 +400,7 @@ public class TiledMazeGenerator : EditorWindow
         if (t == TOP && s.Contains("End"))
         {            
             int[,] p = getPathFromFile(s);
+            p = rotateClockwise(p);
             tiles[selectedRow, selectedColumn].setPath(p);
             tiles[selectedRow, selectedColumn].setComplete(true);
         }
@@ -401,24 +413,34 @@ public class TiledMazeGenerator : EditorWindow
         if (t == RIGHT && s.Contains("End"))
         {
             int[,] p = getPathFromFile(s);
+            p = rotateClockwise(p);
+            p = rotateClockwise(p);
             tiles[selectedRow, selectedColumn].setPath(p);
             tiles[selectedRow, selectedColumn].setComplete(true);
         }
         if (t == BOT && s.Contains("End"))
         {
             int[,] p = getPathFromFile(s);
+            p = rotateClockwise(p);
+            p = rotateClockwise(p);
+            p = rotateClockwise(p);
             tiles[selectedRow, selectedColumn].setPath(p);
             tiles[selectedRow, selectedColumn].setComplete(true);
         }
         else if (t == BOT_LEFT  && s.Contains("L"))
         {
             int[,] p = getPathFromFile(s);
+            p = rotateClockwise(p);
+            p = rotateClockwise(p);
+            p = rotateClockwise(p);
             tiles[selectedRow, selectedColumn].setPath(p);
             tiles[selectedRow, selectedColumn].setComplete(true);
         }
         else if (t == BOT_RIGHT && s.Contains("L"))
         {
             int[,] p = getPathFromFile(s);
+            p = rotateClockwise(p);
+            p = rotateClockwise(p);
             tiles[selectedRow, selectedColumn].setPath(p);
             tiles[selectedRow, selectedColumn].setComplete(true);
         }
@@ -431,6 +453,7 @@ public class TiledMazeGenerator : EditorWindow
         else if (t == TOP_RIGHT && s.Contains("L"))
         {
             int[,] p = getPathFromFile(s);
+            p = rotateClockwise(p);
             tiles[selectedRow, selectedColumn].setPath(p);
             tiles[selectedRow, selectedColumn].setComplete(true);
         }
@@ -443,24 +466,31 @@ public class TiledMazeGenerator : EditorWindow
         else if (t == THROUGH_VERTICAL && s.Contains("Through"))
         {
             int[,] p = getPathFromFile(s);
+            p = rotateClockwise(p);
             tiles[selectedRow, selectedColumn].setPath(p);
             tiles[selectedRow, selectedColumn].setComplete(true);
         }
         else if (t == LEFT_T  && s.Contains("T"))
         {
             int[,] p = getPathFromFile(s);
+            p = rotateClockwise(p);
             tiles[selectedRow, selectedColumn].setPath(p);
             tiles[selectedRow, selectedColumn].setComplete(true);
         }
         else if (t == RIGHT_T && s.Contains("T"))
         {
             int[,] p = getPathFromFile(s);
+            p = rotateClockwise(p);
+            p = rotateClockwise(p);
+            p = rotateClockwise(p);
             tiles[selectedRow, selectedColumn].setPath(p);
             tiles[selectedRow, selectedColumn].setComplete(true);
         }
         else if (t == TOP_T && s.Contains("T"))
         {
             int[,] p = getPathFromFile(s);
+            p = rotateClockwise(p);
+            p = rotateClockwise(p);
             tiles[selectedRow, selectedColumn].setPath(p);
             tiles[selectedRow, selectedColumn].setComplete(true);
         }
@@ -480,6 +510,7 @@ public class TiledMazeGenerator : EditorWindow
         {
             Debug.Log("Invalid input for selected tile");
         }
+        tiles[selectedRow, selectedColumn].setFileName(s);
         updateDisplayTexture(selectedRow, selectedColumn);
     }
     private void randomizeTiles()
@@ -552,7 +583,7 @@ public class TiledMazeGenerator : EditorWindow
     private void chooseTile(int r, int c)
     {
         if (r < 0 || r == mazeHeight || c < 0 || c == mazeWidth || tiles[r, c].isCreated()) return;
-        
+        string filePath = "";
         string con = "";
         int lefty, righty, topx, botx;
         int[,] p = new int[perTileDetail, perTileDetail];
@@ -572,7 +603,7 @@ public class TiledMazeGenerator : EditorWindow
                     con = "_?_?";
                 }
                 possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "EndDetail" + perTileDetail + con + ".txt");
-                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                filePath = possibleFiles[Random.Range(0, possibleFiles.Length)]; p= getPathFromFile(filePath);
                 tiles[r, c].setPath(p);
                 tiles[r, c].setComplete(true);
                 chooseTile(r, c - 1);
@@ -588,7 +619,7 @@ public class TiledMazeGenerator : EditorWindow
                     con = "_?_?";
                 }
                 possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "EndDetail" + perTileDetail + con + ".txt");
-                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                filePath = possibleFiles[Random.Range(0, possibleFiles.Length)]; p= getPathFromFile(filePath);
                 p = rotateClockwise(p);
                 p = rotateClockwise(p);
                 tiles[r, c].setPath(p);
@@ -607,7 +638,7 @@ public class TiledMazeGenerator : EditorWindow
                 }
 
                 possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "EndDetail" + perTileDetail + con + ".txt");
-                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                filePath = possibleFiles[Random.Range(0, possibleFiles.Length)]; p= getPathFromFile(filePath);
                 p = rotateClockwise(p);
                 tiles[r, c].setPath(p);
                 tiles[r, c].setComplete(true);
@@ -624,7 +655,7 @@ public class TiledMazeGenerator : EditorWindow
                     con = "_?_?";
                 }
                 possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "EndDetail" + perTileDetail + con + ".txt");
-                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                filePath = possibleFiles[Random.Range(0, possibleFiles.Length)]; p= getPathFromFile(filePath);
                 p = rotateClockwise(p);
                 p = rotateClockwise(p);
                 p = rotateClockwise(p);
@@ -655,7 +686,7 @@ public class TiledMazeGenerator : EditorWindow
                     con = "_?_?_?";
                 }
                 possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "ThroughDetail" + perTileDetail + con + ".txt");
-                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                filePath = possibleFiles[Random.Range(0, possibleFiles.Length)]; p= getPathFromFile(filePath);
                 tiles[r, c].setPath(p);
                 tiles[r, c].setComplete(true);
                 chooseTile(r, c - 1);
@@ -685,7 +716,7 @@ public class TiledMazeGenerator : EditorWindow
                 }
 
                 possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "ThroughDetail" + perTileDetail + con + ".txt");
-                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                filePath = possibleFiles[Random.Range(0, possibleFiles.Length)]; p= getPathFromFile(filePath);
                 p = rotateClockwise(p);
                 tiles[r, c].setPath(p);
                 tiles[r, c].setComplete(true);
@@ -714,7 +745,7 @@ public class TiledMazeGenerator : EditorWindow
                     con = "_?_?_?";
                 }
                 possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "LDetail" + perTileDetail + con + ".txt");
-                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                filePath = possibleFiles[Random.Range(0, possibleFiles.Length)]; p= getPathFromFile(filePath);
                 p = rotateClockwise(p);
                 p = rotateClockwise(p);
                 p = rotateClockwise(p);
@@ -745,7 +776,7 @@ public class TiledMazeGenerator : EditorWindow
                     con = "_?_?_?";
                 }
                 possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "LDetail" + perTileDetail + con + ".txt");
-                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                filePath = possibleFiles[Random.Range(0, possibleFiles.Length)]; p= getPathFromFile(filePath);
                 p = rotateClockwise(p);
                 p = rotateClockwise(p);
                 tiles[r, c].setPath(p);
@@ -775,7 +806,7 @@ public class TiledMazeGenerator : EditorWindow
                     con = "_?_?_?";
                 }
                 possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "LDetail" + perTileDetail + con + ".txt");
-                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                filePath = possibleFiles[Random.Range(0, possibleFiles.Length)]; p= getPathFromFile(filePath);
                 p = rotateClockwise(p);
                 tiles[r, c].setPath(p);
                 tiles[r, c].setComplete(true);
@@ -804,7 +835,7 @@ public class TiledMazeGenerator : EditorWindow
                     con = "_?_?_?";
                 }
                 possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "LDetail" + perTileDetail + con + ".txt");
-                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                filePath = possibleFiles[Random.Range(0, possibleFiles.Length)]; p= getPathFromFile(filePath);
                 tiles[r, c].setPath(p);
                 tiles[r, c].setComplete(true);
                 chooseTile(r, c - 1);
@@ -843,7 +874,7 @@ public class TiledMazeGenerator : EditorWindow
                                 
                 con += "_?";
                 possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "TDetail" + perTileDetail + con + ".txt");
-                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                filePath = possibleFiles[Random.Range(0, possibleFiles.Length)]; p= getPathFromFile(filePath);
                 p = rotateClockwise(p);
                 tiles[r, c].setPath(p);
                 tiles[r, c].setComplete(true);
@@ -884,7 +915,7 @@ public class TiledMazeGenerator : EditorWindow
                 
                 con += "_?";
                 possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "TDetail" + perTileDetail + con + ".txt");
-                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                filePath = possibleFiles[Random.Range(0, possibleFiles.Length)]; p= getPathFromFile(filePath);
                 p = rotateClockwise(p);
                 p = rotateClockwise(p);
                 p = rotateClockwise(p);
@@ -924,7 +955,7 @@ public class TiledMazeGenerator : EditorWindow
                 }
                 con += "_?";
                 possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "TDetail" + perTileDetail + con + ".txt");
-                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                filePath = possibleFiles[Random.Range(0, possibleFiles.Length)]; p= getPathFromFile(filePath);
                 p = rotateClockwise(p);
                 p = rotateClockwise(p);
                 tiles[r, c].setPath(p);
@@ -963,7 +994,7 @@ public class TiledMazeGenerator : EditorWindow
                 }
                 con += "_?";
                 possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "TDetail" + perTileDetail + con + ".txt");
-                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                filePath = possibleFiles[Random.Range(0, possibleFiles.Length)]; p= getPathFromFile(filePath);
                 tiles[r, c].setPath(p);
                 tiles[r, c].setComplete(true);
                 chooseTile(r + 1, c);
@@ -1009,7 +1040,7 @@ public class TiledMazeGenerator : EditorWindow
                 }
                 con += "_?";
                 possibleFiles = Directory.GetFiles(Application.dataPath + "/" + usingPath, "CrossDetail" + perTileDetail + con + ".txt");
-                p = getPathFromFile(possibleFiles[Random.Range(0, possibleFiles.Length)]);
+                filePath = possibleFiles[Random.Range(0, possibleFiles.Length)]; p= getPathFromFile(filePath);
                 tiles[r, c].setPath(p);
                 tiles[r, c].setComplete(true);
                 chooseTile(r - 1, c);
@@ -1020,6 +1051,7 @@ public class TiledMazeGenerator : EditorWindow
             default:
                 break;
         }
+        tiles[r, c].setFileName(filePath);
         updateDisplayTexture(r, c);
     }
     private void updateDisplayTexture(int r, int c)
