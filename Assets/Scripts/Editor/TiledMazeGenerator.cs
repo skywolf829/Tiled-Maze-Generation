@@ -65,6 +65,7 @@ public class TiledMazeGenerator : EditorWindow
     private int mazeWidth = 4, mazeHeight = 4;
     private int[] VEBP = new int[] { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 }, HEBP = new int[] { 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0 };
     private string VEBPString = "111111111111", HEBPString = "000110000001";
+    private string tilesName = "Test";
 
     private TextAsset t;
     List<int> exits;
@@ -150,32 +151,43 @@ public class TiledMazeGenerator : EditorWindow
         TileOptions();
         TextureArea();
 
+        tilesName = EditorGUILayout.TextField("Name for tiles created", tilesName);
+
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("Load tiles into terrain"))
         {
+            if (Directory.Exists(Application.dataPath + saveLocation + "/Terrains/" + tilesName) == false)
+            {                
+                Directory.CreateDirectory(Application.dataPath + saveLocation + "/Terrains/" + tilesName);
+            }
             for (int i = 0; i < mazeHeight; i++)
             {
                 for (int j = 0; j < mazeWidth; j++)
                 {
-                    tiles[i, j].instantiateTile();
+                    
+                    tiles[i, j].instantiateTile("Assets" + saveLocation + "/Terrains/" + tilesName);
                     tiles[i, j].loadPathsFromPath();
                     tiles[i, j].setPathWidth(pathWidth);
                     tiles[i, j].setWidth(tileWidth);
                     tiles[i, j].setHeight(tileHeight);
-                    if(textures.Length > 0) tiles[i, j].createSplatMap(textures, baseTextureResolution, sampled);
-                    tiles[i, j].createTile();
+                    if(textures.Length > 0) tiles[i, j].createSplatMap(textures, baseTextureResolution, sampled, "Assets" + saveLocation + "/Terrains/" + tilesName);
+                    tiles[i, j].createTile("Assets" + saveLocation + "/Terrains/" + tilesName);
                 }
             }
         }
         if (GUILayout.Button("Load selected tile into terrain"))
         {
-            tiles[selectedRow, selectedColumn].instantiateTile();
+            if (Directory.Exists(Application.dataPath + saveLocation + "/Terrains/" + tilesName) == false)
+            {
+                Directory.CreateDirectory(Application.dataPath + saveLocation + "/Terrains/" + tilesName);
+            }
+            tiles[selectedRow, selectedColumn].instantiateTile("Assets" + saveLocation + "/Terrains/" + tilesName);
             tiles[selectedRow, selectedColumn].loadPathsFromPath();
             tiles[selectedRow, selectedColumn].setPathWidth(pathWidth);
             tiles[selectedRow, selectedColumn].setWidth(tileWidth);
             tiles[selectedRow, selectedColumn].setHeight(tileHeight);
-            if (textures.Length > 0) tiles[selectedRow, selectedColumn].createSplatMap(textures, baseTextureResolution, sampled);
-            tiles[selectedRow, selectedColumn].createTile();
+            if (textures.Length > 0) tiles[selectedRow, selectedColumn].createSplatMap(textures, baseTextureResolution, sampled, "Assets" + saveLocation + "/Terrains/" + tilesName);
+            tiles[selectedRow, selectedColumn].createTile("Assets" + saveLocation + "/Terrains/" + tilesName);
                 
         }
         GUILayout.EndHorizontal();

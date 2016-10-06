@@ -69,10 +69,10 @@ namespace Assets.Scripts.Editor
             //AssetDatabase.CreateAsset(terrainData, "Assets/" + name + r + "_" + c + ".asset");
             //AssetDatabase.SaveAssets();
         }
-        public void instantiateTile()
+        public void instantiateTile(string s)
         {
             terrainData = new TerrainData();
-            AssetDatabase.CreateAsset(terrainData, "Assets/" + name + ".asset");
+            AssetDatabase.CreateAsset(terrainData, s + "/" + name + ".asset");
             AssetDatabase.SaveAssets();
         }
         public bool isCreated() { return completed; }
@@ -752,10 +752,11 @@ namespace Assets.Scripts.Editor
 
             terrainData.SetHeights(0, 0, heightmap);
         }
-        public void createSplatMap(Texture2D[] textures, int textureResolution, bool sampled)
+        public void createSplatMap(Texture2D[] textures, int textureResolution, bool sampled, string loc)
         {
             
-            terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath("Assets/" + name + ".asset", typeof(TerrainData));
+            terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath(loc + "/" + name + ".asset", typeof(TerrainData));
+            
             terrainData.baseMapResolution = textureResolution;
             terrainData.alphamapResolution = textureResolution;
 
@@ -803,20 +804,44 @@ namespace Assets.Scripts.Editor
                 }
                 List<Vector2> drawingPoints = GetDrawingPoints0();
                 float adjustedPathWidth = terrainData.alphamapWidth * (pathWidth / width) / 2;
+                
                 foreach (Vector2 point in drawingPoints)
                 {
-                    for (int y = Mathf.Max(0, (int)(point.y - adjustedPathWidth / 2)); y < Mathf.Min(terrainData.alphamapHeight, (int)(point.y + adjustedPathWidth / 2)); y++)
+                    for (int y = Mathf.Max(0, (int)(point.y - adjustedPathWidth * 2)); y < Mathf.Min(terrainData.alphamapHeight, (int)(point.y + adjustedPathWidth * 2)); y++)
                     {
-                        for (int x = Mathf.Max(0, (int)(point.x - adjustedPathWidth / 2)); x < Mathf.Min(terrainData.alphamapWidth, (int)(point.x + adjustedPathWidth / 2)); x++)
+                        for (int x = Mathf.Max(0, (int)(point.x - adjustedPathWidth * 2)); x < Mathf.Min(terrainData.alphamapWidth, (int)(point.x + adjustedPathWidth * 2)); x++)
                         {
                             if (Vector2.Distance(new Vector2(x, y), point) < adjustedPathWidth)
                             {
                                 splatmapData[y, x, 0] = 1;
+                                splatmapData[y, x, 1] = 0;
+                            }
+                            else
+                            {
+                                if(textures.Length > 1)
+                                {
+                                    Vector2 the = Vector2.Lerp(new Vector2(1, 0), new Vector2(0, 1), (Vector2.Distance(new Vector2(x, y), point) - adjustedPathWidth) / (adjustedPathWidth));
+                                    if (the.x > splatmapData[y, x, 0])
+                                    {
+                                        splatmapData[y, x, 1] = the.y;
+                                        splatmapData[y, x, 0] = the.x;
+                                    }
+                                }
                             }
                         }
                     }
-
                 }
+                for (int y = 0; y < terrainData.alphamapHeight; y++)
+                {
+                    for (int x = 0; x < terrainData.alphamapWidth; x++)
+                    {
+                        if(splatmapData[y, x, 0] == 0 && textures.Length > 1)
+                        {
+                            splatmapData[y, x, 1] = 1;
+                        }
+                    }
+                }
+
             }
             terrainData.SetAlphamaps(0, 0, splatmapData);
             AssetDatabase.SaveAssets();
@@ -829,9 +854,9 @@ namespace Assets.Scripts.Editor
             AssetDatabase.SaveAssets();
         }
 
-        public void createTile()
+        public void createTile(string s)
         {
-            terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath("Assets/" + name + ".asset", typeof(TerrainData));
+            terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath(s + "/" + name + ".asset", typeof(TerrainData));
             terrainData.size = new Vector3(width, 1, height);
             terrainData.name = name;
             if (GameObject.Find(name))
