@@ -50,9 +50,11 @@ public class TiledMazeGenerator : EditorWindow
 
     private float tileWidth = 10;
     private float tileHeight = 10;
+    private float tileDepth = 10;
 
     private bool sampled = false;
     private int baseTextureResolution = 1024;
+    private int heightmapResolution = 128;
     private float pathWidth = 2;
 
     private int selectedRow, selectedColumn;
@@ -80,11 +82,11 @@ public class TiledMazeGenerator : EditorWindow
         saveLocation = EditorGUILayout.TextField("Save location", saveLocation);
         int oldDetail = perTileDetail;
         perTileDetail = Mathf.Clamp(EditorGUILayout.IntField("Detail per tile", perTileDetail), 3, 9);
-        if(perTileDetail % 2 == 0)
+        if (perTileDetail % 2 == 0)
         {
             perTileDetail++;
         }
-        if(oldDetail != perTileDetail)
+        if (oldDetail != perTileDetail)
         {
             updateArrays();
         }
@@ -92,7 +94,7 @@ public class TiledMazeGenerator : EditorWindow
         maxNumTilesPerType = Mathf.Clamp(EditorGUILayout.IntField("Number of tiles per exit combination", maxNumTilesPerType), 1, 10);
         if (GUILayout.Button("Generate all tiles")) {
             if (ValidateSaveLocation())
-            {                     
+            {
                 TilePathGenerator tpg = new TilePathGenerator();
                 tpg.setDetail(perTileDetail);
                 tpg.setSaveLocation(saveLocation);
@@ -113,22 +115,22 @@ public class TiledMazeGenerator : EditorWindow
         mazeHeight = EditorGUILayout.IntField("Maze height", mazeHeight);
         if (mazeHeight < 2) mazeHeight = 2;
 
-        if(oldWidth != mazeWidth || oldHeight != mazeHeight)
+        if (oldWidth != mazeWidth || oldHeight != mazeHeight)
         {
             updateArrays();
-        } 
+        }
 
-        if(GUILayout.Button("Randomize tiles") && ValidateBitVectors())
+        if (GUILayout.Button("Randomize tiles") && ValidateBitVectors())
         {
             randomizeTiles();
         }
         GUILayout.BeginVertical();
-        for(int i  = 0; i < mazeHeight; i++)
+        for (int i = 0; i < mazeHeight; i++)
         {
             GUILayout.BeginHorizontal(GUILayout.Width(1));
-            for(int j = 0; j < mazeWidth; j++)
+            for (int j = 0; j < mazeWidth; j++)
             {
-                if (GUILayout.Button(displayTextures[i, j], "Label")) 
+                if (GUILayout.Button(displayTextures[i, j], "Label"))
                 {
                     selectedColumn = j;
                     selectedRow = i;
@@ -138,8 +140,8 @@ public class TiledMazeGenerator : EditorWindow
                     {
                         s = s.Substring(s.LastIndexOf('/') + 1);
                     }
-                    int x = int.Parse(s.Substring(s.Length - 5, 1));                    
-                    s = s.Substring(0, s.Length - 5) + (x+1) % maxNumTilesPerType;
+                    int x = int.Parse(s.Substring(s.Length - 5, 1));
+                    s = s.Substring(0, s.Length - 5) + (x + 1) % maxNumTilesPerType;
                     loadTile(s);
                 }
             }
@@ -150,27 +152,29 @@ public class TiledMazeGenerator : EditorWindow
         DropAreaGUI();
         TileOptions();
         TextureArea();
-
+        HeightmapArea();
         tilesName = EditorGUILayout.TextField("Name for tiles created", tilesName);
 
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("Load tiles into terrain"))
         {
             if (Directory.Exists(Application.dataPath + saveLocation + "/Terrains/" + tilesName) == false)
-            {                
+            {
                 Directory.CreateDirectory(Application.dataPath + saveLocation + "/Terrains/" + tilesName);
             }
             for (int i = 0; i < mazeHeight; i++)
             {
                 for (int j = 0; j < mazeWidth; j++)
                 {
-                    
+
                     tiles[i, j].instantiateTile("Assets" + saveLocation + "/Terrains/" + tilesName);
                     tiles[i, j].loadPathsFromPath();
                     tiles[i, j].setPathWidth(pathWidth);
                     tiles[i, j].setWidth(tileWidth);
                     tiles[i, j].setHeight(tileHeight);
-                    if(textures.Length > 0) tiles[i, j].createSplatMap(textures, baseTextureResolution, sampled, "Assets" + saveLocation + "/Terrains/" + tilesName);
+                    tiles[i, j].setDepth(tileDepth);
+                    if (textures.Length > 0) tiles[i, j].createSplatMap(textures, baseTextureResolution, sampled, "Assets" + saveLocation + "/Terrains/" + tilesName);
+                    tiles[i, j].createHeightMap(heightmapResolution, "Assets" + saveLocation + "/Terrains/" + tilesName);
                     tiles[i, j].createTile("Assets" + saveLocation + "/Terrains/" + tilesName);
                 }
             }
@@ -186,9 +190,11 @@ public class TiledMazeGenerator : EditorWindow
             tiles[selectedRow, selectedColumn].setPathWidth(pathWidth);
             tiles[selectedRow, selectedColumn].setWidth(tileWidth);
             tiles[selectedRow, selectedColumn].setHeight(tileHeight);
+            tiles[selectedRow, selectedColumn].setDepth(tileDepth);
             if (textures.Length > 0) tiles[selectedRow, selectedColumn].createSplatMap(textures, baseTextureResolution, sampled, "Assets" + saveLocation + "/Terrains/" + tilesName);
+            tiles[selectedRow, selectedColumn].createHeightMap(heightmapResolution, "Assets" + saveLocation + "/Terrains/" + tilesName);
             tiles[selectedRow, selectedColumn].createTile("Assets" + saveLocation + "/Terrains/" + tilesName);
-                
+
         }
         GUILayout.EndHorizontal();
         GUILayout.EndScrollView();
@@ -268,7 +274,7 @@ public class TiledMazeGenerator : EditorWindow
             for(int c = 0; c < mazeWidth; c++)
             {
                 displayTextures[r, c] = Texture2D.whiteTexture;
-                tiles[r, c] = new Tile(r, c, 10, 10, perTileDetail);
+                tiles[r, c] = new Tile(r, c, tileWidth, tileHeight, tileDepth, perTileDetail);
                 tiling[r, c] = 0;
                 tilingFiles[r, c] = "";
             }
@@ -404,7 +410,7 @@ public class TiledMazeGenerator : EditorWindow
         }
         return tilingMap;
     }
-
+    
     private void loadTile(string s)
     {
         s = Application.dataPath + "/" + usingPath + "/" + s + ".txt";
@@ -527,6 +533,7 @@ public class TiledMazeGenerator : EditorWindow
     }
     private void randomizeTiles()
     {
+        ValidateSaveLocation();
         usingPath = saveLocation + "/" + perTileDetail + "_" + numPossibleExits;
         for (int i = 0; i < mazeHeight; i++)
         {
@@ -535,7 +542,6 @@ public class TiledMazeGenerator : EditorWindow
                 tiles[i, j].setPath(new int[perTileDetail, perTileDetail]);
             }
         }
-
         float startingSpot = (float)(perTileDetail - 2) / (float)numPossibleExits;
         exits = new List<int>();
         for (int i = 1; i <= (numPossibleExits / 2); i++)
@@ -591,7 +597,7 @@ public class TiledMazeGenerator : EditorWindow
         }
         return rotated;
     }
-
+    
     private void chooseTile(int r, int c)
     {
         if (r < 0 || r == mazeHeight || c < 0 || c == mazeWidth || tiles[r, c].isCreated()) return;
@@ -1128,8 +1134,9 @@ public class TiledMazeGenerator : EditorWindow
     }
     public void TileOptions()
     {
-        tileWidth = EditorGUILayout.FloatField("Tile width(m)", tileWidth);
-        tileHeight = EditorGUILayout.FloatField("Tile height(m)", tileHeight);
+        tileWidth = Mathf.Clamp(EditorGUILayout.FloatField("Tile width(m)", tileWidth), 1, 100);
+        tileHeight = Mathf.Clamp(EditorGUILayout.FloatField("Tile height(m)", tileHeight), 1, 100);
+        tileDepth = Mathf.Clamp(EditorGUILayout.FloatField("Tile depth(m)", tileDepth), 1, 1000);
     }
     public void TextureArea()
     {
@@ -1155,6 +1162,10 @@ public class TiledMazeGenerator : EditorWindow
             if (textures.Length > 0) ArrayUtility.RemoveAt(ref textures, textures.Length - 1);
         }
         GUILayout.EndHorizontal();
+    }
+    public void HeightmapArea()
+    {
+        heightmapResolution = Mathf.ClosestPowerOfTwo(EditorGUILayout.IntField("Heightmap resolution", heightmapResolution)) + 1;
     }
 }
 

@@ -38,7 +38,7 @@ namespace Assets.Scripts.Editor
         private List<Vector2> controlPoints;
         private int segmentsPerCurve = 20;
         private int row, column, tileDetail, tileType;
-        private float width, height;
+        private float width, height, depth, heightmapRes;
         private float pathWidth;
         private bool completed;
 
@@ -53,12 +53,13 @@ namespace Assets.Scripts.Editor
             terrainData = new TerrainData();
             paths = new List<List<Vector2>>();
         }
-        public Tile(int r, int c, float w, float h, int detail)
+        public Tile(int r, int c, float w, float h, float d, int detail)
         {
             row = r;
             column = c;
             width = w;
             height = h;
+            depth = d;
             tileDetail = detail;
             completed = false;
             name = r +"_" + c;
@@ -118,6 +119,7 @@ namespace Assets.Scripts.Editor
         public void setType(int t) { tileType = t; }
         public void setWidth(float f) { width = f; }
         public void setHeight(float f) { height = f; }
+        public void setDepth(float f) { depth = f; }
         public void setPathWidth(float p) { pathWidth = p; }
         public void setFileName(string s) { fileName = s; }
         public void setName(string n) { name = n; }
@@ -745,12 +747,128 @@ namespace Assets.Scripts.Editor
             }
             return walk;
         }
-        public void createHeightMap(int heightMapResolution)
+        public void createHeightMap(int heightMapResolution, string loc)
         {
-            terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath("Assets/" + name + ".asset", typeof(TerrainData));
+            terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath(loc + "/" + name + ".asset", typeof(TerrainData));
             float[,] heightmap = new float[heightMapResolution, heightMapResolution];
-
+            heightmapRes = heightMapResolution;
+            terrainData.heightmapResolution = heightMapResolution;
+            heightmap[0, 0] = UnityEngine.Random.value;
+            heightmap[0, heightMapResolution - 1] = UnityEngine.Random.value;
+            heightmap[heightMapResolution - 1, 0] = UnityEngine.Random.value;
+            heightmap[heightMapResolution - 1, heightMapResolution - 1] = UnityEngine.Random.value;
+            divide(ref heightmap, heightMapResolution);
+            heightmap = gaussBlur(heightmap, heightMapResolution, heightMapResolution, 3);
             terrainData.SetHeights(0, 0, heightmap);
+            AssetDatabase.SaveAssets();
+        }
+        private void divide(ref float[,] hm, int size)
+        {
+            int x, y, half = size / 2;
+            float scale = (size / heightmapRes) * 0.2f;
+
+            if (half < 1) return;
+
+            for (y = half; y < heightmapRes - 1; y += size)
+            {
+                for(x = half; x < heightmapRes - 1; x += size)
+                {
+                    square(ref hm, x, y, half, UnityEngine.Random.value * scale * 2 - scale);
+                }
+            }
+            for (y = 0; y < heightmapRes; y += half)
+            {
+                for (x = (y + half) % size; x < heightmapRes; x += size)
+                {
+                    diamond(ref hm, x, y, half, UnityEngine.Random.value * scale * 2 - scale);
+                }
+            }
+            divide(ref hm, size / 2);
+        }
+        private float[,] square(ref float[,] hm, int x, int y, int size, float offset)
+        {
+            //Debug.Log(x + " " + y + " " + size);
+            float avg = (hm[x - size, y - size] + hm[x + size, y - size] + hm[x - size, y + size] + hm[x + size, y + size]) / 4.0f;
+            hm[x, y] = avg + offset;
+
+            return hm;
+        }
+        private float[,] diamond(ref float[,] hm, int x, int y, int size, float offset)
+        {
+            //Debug.Log(x + " " + y + " " + size);
+            int c = 0;
+            float avg = 0;
+            if(y - size >= 0)
+            {
+                avg += hm[x, y - size];
+                c++;
+            }
+            if(y + size < heightmapRes)
+            {
+                avg += hm[x, y + size];
+                c++;
+            }
+            if(x - size >= 0)
+            {
+                avg += hm[x - size, y];
+                c++;
+            }
+            if(x + size < heightmapRes)
+            {
+                avg += hm[x + size, y];
+                c++;
+            }
+            avg /= 4.0f;
+            hm[x, y] = avg + offset;
+
+            return hm;
+        }
+        private int[] boxesForGauss(float sigma, int n)
+        {
+            float wIdeal = Mathf.Sqrt((12 * sigma * sigma / n) + 1);
+            float w1 = Mathf.Floor(wIdeal);
+            if (w1 % 2 == 0) w1--;
+            float wu = w1 + 2;
+
+            float mIdeal = (12 * sigma * sigma - n * w1 * w1 - 4 * n * w1 - 3 * n) / (-4 * w1 - 4);
+            float m = Mathf.Round(mIdeal);
+
+            int[] sizes = new int[n];
+            for (int i = 0; i < n; i++)
+            {
+                sizes[i] = (int)(i < m ? w1 : wu);
+            }
+            return sizes;
+        }
+        private float[,] gaussBlur(float[,] scl, int w, int h, int r)
+        {
+            int[] boxes = boxesForGauss(r, 3);
+            float[,] pass1 = boxBlur(scl, w, h, (boxes[0] - 1) / 2);
+            float[,] pass2 = boxBlur(pass1, w, h, (boxes[1] - 1) / 2);
+            float[,] finalPass = boxBlur(pass2, w, h, (boxes[2] - 1) / 2);
+            return finalPass;
+        }
+        private float[,] boxBlur(float[,] scl, int w, int h, int r)
+        {
+            float[,] blur = new float[w, h];
+            for (int i = 0; i < h; i++)
+            {
+                for (int j = 0; j < w; j++)
+                {
+                    float val = 0.0f;
+                    for (int iy = i - r; iy < i + r + 1; iy++)
+                    {
+                        for (int ix = j - r; ix < j + r + 1; ix++)
+                        {
+                            int x = Mathf.Min(w - 1, Mathf.Max(0, ix));
+                            int y = Mathf.Min(h - 1, Mathf.Max(0, iy));
+                            val += scl[y, x];
+                        }
+                    }
+                    blur[i, j] = val / ((r + r + 1) * (r + r + 1));
+                }
+            }
+            return blur;
         }
         public void createSplatMap(Texture2D[] textures, int textureResolution, bool sampled, string loc)
         {
@@ -857,7 +975,7 @@ namespace Assets.Scripts.Editor
         public void createTile(string s)
         {
             terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath(s + "/" + name + ".asset", typeof(TerrainData));
-            terrainData.size = new Vector3(width, 1, height);
+            terrainData.size = new Vector3(width, depth, height);
             terrainData.name = name;
             if (GameObject.Find(name))
             {
