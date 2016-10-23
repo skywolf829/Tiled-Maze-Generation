@@ -747,25 +747,88 @@ namespace Assets.Scripts.Editor
             }
             return walk;
         }
-        public void createHeightMap(int heightMapResolution, string loc)
+		public void createHeightMap(int heightMapResolution, string loc)
         {
             terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath(loc + "/" + name + ".asset", typeof(TerrainData));
             float[,] heightmap = new float[heightMapResolution, heightMapResolution];
             heightmapRes = heightMapResolution;
-            terrainData.heightmapResolution = heightMapResolution;
-            heightmap[0, 0] = UnityEngine.Random.value;
-            heightmap[0, heightMapResolution - 1] = UnityEngine.Random.value;
-            heightmap[heightMapResolution - 1, 0] = UnityEngine.Random.value;
-            heightmap[heightMapResolution - 1, heightMapResolution - 1] = UnityEngine.Random.value;
-            divide(ref heightmap, heightMapResolution);
-            heightmap = gaussBlur(heightmap, heightMapResolution, heightMapResolution, 3);
+            terrainData.heightmapResolution = heightMapResolution;         
             terrainData.SetHeights(0, 0, heightmap);
             AssetDatabase.SaveAssets();
         }
-        private void divide(ref float[,] hm, int size)
+		public void diamondSquares (string loc, float s){
+			terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath(loc + "/" + name + ".asset", typeof(TerrainData));
+			float[,] heightmap = terrainData.GetHeights (0, 0, (int)heightmapRes, (int)heightmapRes);
+			heightmap[0, 0] = UnityEngine.Random.value;
+			heightmap[0, (int)heightmapRes - 1] = UnityEngine.Random.value;
+			heightmap[(int)heightmapRes - 1, 0] = UnityEngine.Random.value;
+			heightmap[(int)heightmapRes - 1, (int)heightmapRes - 1] = UnityEngine.Random.value;
+			divide(ref heightmap, (int)heightmapRes, s);
+			terrainData.SetHeights(0, 0, heightmap);
+			AssetDatabase.SaveAssets();
+		}
+		public void smooth(string loc, int radius){
+			terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath(loc + "/" + name + ".asset", typeof(TerrainData));
+			float[,] heightmap = terrainData.GetHeights (0, 0, (int)heightmapRes, (int)heightmapRes);
+			heightmap = gaussBlur (heightmap,(int)heightmapRes, (int)heightmapRes, radius);
+			terrainData.SetHeights(0, 0, heightmap);
+			AssetDatabase.SaveAssets();
+		}
+		public void calderas(string loc, float c){
+			terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath(loc + "/" + name + ".asset", typeof(TerrainData));
+			float[,] heightmap = terrainData.GetHeights (0, 0, (int)heightmapRes, (int)heightmapRes);
+			for (int i = 0; i < (int)heightmapRes; i++) {
+				for (int j = 0; j < (int)heightmapRes; j++) {
+					if (heightmap [i, j] > c) {
+						heightmap [i, j] = c - (heightmap [i, j] - c);
+					}
+				}
+			}
+			terrainData.SetHeights(0, 0, heightmap);
+			AssetDatabase.SaveAssets();
+		}
+		public void terrace(string loc, List<float> heights){
+			terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath(loc + "/" + name + ".asset", typeof(TerrainData));
+			float[,] heightmap = terrainData.GetHeights (0, 0, (int)heightmapRes, (int)heightmapRes);
+
+			for (int i = 0; i < (int)heightmapRes; i++) {
+				for (int j = 0; j < (int)heightmapRes; j++) {
+					int closest = 0;
+					for (int k = 1; k < heights.Count; k++) {
+						if(Math.Abs(heightmap[i, j] - (heights[k])) < Math.Abs(heightmap[i, j] - (heights[closest]))){
+							closest = k;
+						}
+					}
+					heightmap [i, j] = heights[closest];
+				}
+			}
+
+			terrainData.SetHeights(0, 0, heightmap);
+			AssetDatabase.SaveAssets();
+		}
+		public void terrace(string loc, float interval){
+			terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath(loc + "/" + name + ".asset", typeof(TerrainData));
+			float[,] heightmap = terrainData.GetHeights (0, 0, (int)heightmapRes, (int)heightmapRes);
+
+			for (int i = 0; i < (int)heightmapRes; i++) {
+				for (int j = 0; j < (int)heightmapRes; j++) {
+					int closest = 0;
+					for (int k = 1; k < 1.0f / interval; k++) {
+						if(Math.Abs(heightmap[i, j] - (k * interval)) < Math.Abs(heightmap[i, j] - (closest * interval))){
+							closest = k;
+						}
+					}
+					heightmap [i, j] = closest * interval;
+				}
+			}
+
+			terrainData.SetHeights(0, 0, heightmap);
+			AssetDatabase.SaveAssets();
+		}
+		private void divide(ref float[,] hm, int size, float s)
         {
             int x, y, half = size / 2;
-            float scale = (size / heightmapRes) * 0.2f;
+            float scale = (size / heightmapRes) * s;
 
             if (half < 1) return;
 
@@ -783,7 +846,7 @@ namespace Assets.Scripts.Editor
                     diamond(ref hm, x, y, half, UnityEngine.Random.value * scale * 2 - scale);
                 }
             }
-            divide(ref hm, size / 2);
+            divide(ref hm, size / 2, s);
         }
         private float[,] square(ref float[,] hm, int x, int y, int size, float offset)
         {

@@ -56,6 +56,19 @@ public class TiledMazeGenerator : EditorWindow
     private int baseTextureResolution = 1024;
     private int heightmapResolution = 128;
     private float pathWidth = 2;
+	private bool randomizeHeight = true;
+	private float bumpiness = 0.2f;
+	private bool smooth = true;
+	private int smoothRadius = 3;
+	private int smoothPass = 1;
+	private bool calderas = false;
+	private float calderasC = 0.2f;
+	private bool terrace = false;
+	private bool terraceWithValues = false;
+	private bool terraceWithInterval = true;
+	private float terraceInterval = 0.1f;
+	private string terraceValuesString = "0 0.25 0.5 0.75 1";
+	private List<float> terraceValues = new List<float>();
 
     private int selectedRow, selectedColumn;
     private Texture2D[,] displayTextures = new Texture2D[4, 4];
@@ -162,22 +175,14 @@ public class TiledMazeGenerator : EditorWindow
             {
                 Directory.CreateDirectory(Application.dataPath + saveLocation + "/Terrains/" + tilesName);
             }
-            for (int i = 0; i < mazeHeight; i++)
-            {
-                for (int j = 0; j < mazeWidth; j++)
-                {
-
-                    tiles[i, j].instantiateTile("Assets" + saveLocation + "/Terrains/" + tilesName);
-                    tiles[i, j].loadPathsFromPath();
-                    tiles[i, j].setPathWidth(pathWidth);
-                    tiles[i, j].setWidth(tileWidth);
-                    tiles[i, j].setHeight(tileHeight);
-                    tiles[i, j].setDepth(tileDepth);
-                    if (textures.Length > 0) tiles[i, j].createSplatMap(textures, baseTextureResolution, sampled, "Assets" + saveLocation + "/Terrains/" + tilesName);
-                    tiles[i, j].createHeightMap(heightmapResolution, "Assets" + saveLocation + "/Terrains/" + tilesName);
-                    tiles[i, j].createTile("Assets" + saveLocation + "/Terrains/" + tilesName);
-                }
-            }
+			if (terrace && terraceWithValues) {
+				if (ValidatedTerraceValues ()) {					
+					loadAllTiles ();   
+				} else
+					Debug.Log ("Could not parse terrace levels. Please enter floats from 0 - 1 separated with spaces");
+			} else {
+				loadAllTiles ();
+			}
         }
         if (GUILayout.Button("Load selected tile into terrain"))
         {
@@ -185,26 +190,67 @@ public class TiledMazeGenerator : EditorWindow
             {
                 Directory.CreateDirectory(Application.dataPath + saveLocation + "/Terrains/" + tilesName);
             }
-            tiles[selectedRow, selectedColumn].instantiateTile("Assets" + saveLocation + "/Terrains/" + tilesName);
-            tiles[selectedRow, selectedColumn].loadPathsFromPath();
-            tiles[selectedRow, selectedColumn].setPathWidth(pathWidth);
-            tiles[selectedRow, selectedColumn].setWidth(tileWidth);
-            tiles[selectedRow, selectedColumn].setHeight(tileHeight);
-            tiles[selectedRow, selectedColumn].setDepth(tileDepth);
-            if (textures.Length > 0) tiles[selectedRow, selectedColumn].createSplatMap(textures, baseTextureResolution, sampled, "Assets" + saveLocation + "/Terrains/" + tilesName);
-            tiles[selectedRow, selectedColumn].createHeightMap(heightmapResolution, "Assets" + saveLocation + "/Terrains/" + tilesName);
-            tiles[selectedRow, selectedColumn].createTile("Assets" + saveLocation + "/Terrains/" + tilesName);
-
+			if (terrace && terraceWithValues) {
+				if (ValidatedTerraceValues ()) {
+					loadSelectedTile (selectedRow, selectedColumn);
+				} else
+					Debug.Log ("Could not parse terrace levels. Please enter floats from 0 - 1 separated with spaces");
+			} else {
+				loadSelectedTile (selectedRow, selectedColumn);
+			}
+			
         }
-        GUILayout.EndHorizontal();
-        GUILayout.EndScrollView();
+		try{
+        	GUILayout.EndHorizontal();
+		}
+		catch(System.InvalidOperationException e){
+			//Debug.Log (e);
+		}
+		try{
+        	GUILayout.EndScrollView();
+		}
+		catch(System.InvalidOperationException e){
+			//Debug.Log (e);
+		}
     }
-    
+	private bool ValidatedTerraceValues(){
+		bool pass = true;
+		string og = terraceValuesString;
+		terraceValues = new List<float> ();
+		while (terraceValuesString.Length > 0 && pass) {
+			int spot = terraceValuesString.IndexOf (" ");
+
+			string v;
+
+			if (spot == -1) {
+				v = terraceValuesString;
+				terraceValuesString = "";
+			} else {
+				v = terraceValuesString.Substring (0, spot);
+				terraceValuesString = terraceValuesString.Substring (spot + 1, 
+					terraceValuesString.Length - spot - 1);
+			}
+			
+			float value = 0;
+			try{
+				value = float.Parse (v);
+			}
+			catch(System.FormatException e){
+				Debug.Log (e);
+				pass = false;
+			}
+			if (pass) {
+				terraceValues.Add (value);
+			}
+		}
+		terraceValuesString = og;
+		return pass;
+	}
     private bool ValidateSaveLocation()
     {
         if (saveLocation == string.Empty) saveLocation = "GeneratedMazeTiles/";
         string pathToCheck = Application.dataPath + "/" + saveLocation + "/" + perTileDetail + "_" + numPossibleExits;
-        if (Directory.Exists(saveLocation) == false)
+		if (Directory.Exists(Application.dataPath + saveLocation) == false)
         {
             Directory.CreateDirectory(saveLocation);
         }
@@ -1166,6 +1212,134 @@ public class TiledMazeGenerator : EditorWindow
     public void HeightmapArea()
     {
         heightmapResolution = Mathf.ClosestPowerOfTwo(EditorGUILayout.IntField("Heightmap resolution", heightmapResolution)) + 1;
+		randomizeHeight = EditorGUILayout.Toggle ("Randomize heights", randomizeHeight);
+		if (randomizeHeight) {
+			bumpiness = Mathf.Clamp01 (EditorGUILayout.FloatField ("Bumpiness of randomized terrain", bumpiness));
+			smooth = EditorGUILayout.Toggle ("Smooth heights", smooth);
+			if (smooth) {
+				smoothRadius = Mathf.Clamp (EditorGUILayout.IntField ("Smooth radius", smoothRadius), 1, heightmapResolution);
+				smoothPass = Mathf.Clamp (EditorGUILayout.IntField ("Num smoothing passes", smoothPass), 1, 5);
+			}
+			calderas = EditorGUILayout.Toggle ("Caldera's inversion", calderas);
+			if (calderas) {
+				calderasC = Mathf.Clamp01 (EditorGUILayout.FloatField ("Height for inversion", calderasC));
+			}
+			terrace = EditorGUILayout.Toggle ("Terrace heightmap", terrace);
+			if (terrace) {
+				terraceWithValues =	EditorGUILayout.Toggle ("Use values", terraceWithValues);
+				if (terraceWithValues)
+					terraceWithInterval = false;
+				else
+					terraceWithInterval = true;
+				terraceWithInterval = EditorGUILayout.Toggle ("Use interval", terraceWithInterval);
+				if (terraceWithInterval)
+					terraceWithValues = false;
+				else
+					terraceWithValues = true;
+				if (terraceWithValues) {
+					terraceValuesString = EditorGUILayout.TextField (terraceValuesString);
+				}
+				if (terraceWithInterval) {
+					terraceInterval = Mathf.Clamp (EditorGUILayout.FloatField ("Terrace interval", terraceInterval), 0.01f, 1f);
+				}
+			}
+		}
     }
+	private void loadAllTiles(){
+		for (int i = 0; i < mazeHeight; i++)
+		{
+			for (int j = 0; j < mazeWidth; j++)
+			{
+				string s = i * mazeHeight + j + " out of " + mazeHeight * mazeWidth + " tiles completed";
+				float f = ((i * mazeHeight + j) / (float)(mazeHeight * mazeWidth));
+				if (EditorUtility.DisplayCancelableProgressBar ("Loading tiles", s + " - Creating tile", f)) {
+					break;
+				}
+				tiles[i, j].instantiateTile("Assets" + saveLocation + "/Terrains/" + tilesName);
+				if (EditorUtility.DisplayCancelableProgressBar ("Loading tiles", s + " - Loading tile", f)) {
+					break;
+				}
+				tiles[i, j].loadPathsFromPath();
+					if (EditorUtility.DisplayCancelableProgressBar ("Loading tiles", s + " - Setting tile values", f)) {
+						break;
+					}
+				tiles[i, j].setPathWidth(pathWidth);
+				tiles[i, j].setWidth(tileWidth);
+				tiles[i, j].setHeight(tileHeight);
+				tiles[i, j].setDepth(tileDepth);
+				if (EditorUtility.DisplayCancelableProgressBar ("Loading tiles", s + " - Texturing tile", f)) {
+					break;
+				}
+				if (textures.Length > 0) tiles[i, j].createSplatMap(textures, baseTextureResolution, sampled, "Assets" + saveLocation + "/Terrains/" + tilesName);
+				if (EditorUtility.DisplayCancelableProgressBar ("Loading tiles", s + " - Creating heightmap", f)) {
+					break;
+				}
+				tiles[i, j].createHeightMap(heightmapResolution, "Assets" + saveLocation + "/Terrains/" + tilesName);
+				if (randomizeHeight) {
+					if (EditorUtility.DisplayCancelableProgressBar ("Loading tiles", s + " - Randomizing heights", f)) {
+						break;
+					}
+					tiles [i, j].diamondSquares ("Assets" + saveLocation + "/Terrains/" + tilesName, 0.2f);
+					if (smooth) {
+						if (EditorUtility.DisplayCancelableProgressBar ("Loading tiles", s + " - Smoothing heightmap", f)) {
+							break;
+						}
+						for (int k = 0; k < smoothPass; k++) {
+							tiles [i, j].smooth ("Assets" + saveLocation + "/Terrains/" + tilesName, smoothRadius);
+						}
+					}
+					if (calderas) {
+						if (EditorUtility.DisplayCancelableProgressBar ("Loading tiles", s + " - Inverting heightmap", f)) {
+							break;
+						}
+						tiles [i, j].calderas ("Assets" + saveLocation + "/Terrains/" + tilesName, calderasC);
+					}
+					if (terrace) {
+						if (EditorUtility.DisplayCancelableProgressBar ("Loading tiles", s + " - Terracing heightmap", f)) {
+							break;
+						}
+						if (terraceWithValues) {
+							tiles [i, j].terrace ("Assets" + saveLocation + "/Terrains/" + tilesName, terraceValues);
+						}
+						else
+							tiles [i, j].terrace ("Assets" + saveLocation + "/Terrains/" + tilesName, terraceInterval);
+					}
+				}
+				if (EditorUtility.DisplayCancelableProgressBar ("Loading tiles", s + " - Finishing tile", f)) {
+					break;
+				}
+				tiles[i, j].createTile("Assets" + saveLocation + "/Terrains/" + tilesName);
+			}
+		}
+		EditorUtility.ClearProgressBar ();
+	}
+	private void loadSelectedTile(int i, int j){
+		tiles[i, j].instantiateTile("Assets" + saveLocation + "/Terrains/" + tilesName);
+		tiles[i, j].loadPathsFromPath();
+		tiles[i, j].setPathWidth(pathWidth);
+		tiles[i, j].setWidth(tileWidth);
+		tiles[i, j].setHeight(tileHeight);
+		tiles[i, j].setDepth(tileDepth);
+		if (textures.Length > 0) tiles[i, j].createSplatMap(textures, baseTextureResolution, sampled, "Assets" + saveLocation + "/Terrains/" + tilesName);
+		tiles[i, j].createHeightMap(heightmapResolution, "Assets" + saveLocation + "/Terrains/" + tilesName);
+		if (randomizeHeight) {
+			tiles [i, j].diamondSquares ("Assets" + saveLocation + "/Terrains/" + tilesName, 0.2f);
+			if (smooth) {
+				for (int k = 0; k < smoothPass; k++) {
+					tiles [i, j].smooth ("Assets" + saveLocation + "/Terrains/" + tilesName, smoothRadius);
+				}
+			}
+			if (calderas) {
+				tiles [i, j].calderas ("Assets" + saveLocation + "/Terrains/" + tilesName, calderasC);
+			}
+			if (terrace) {
+				if (terraceWithValues) {
+					tiles [i, j].terrace ("Assets" + saveLocation + "/Terrains/" + tilesName, terraceValues);				}
+				else
+					tiles [i, j].terrace ("Assets" + saveLocation + "/Terrains/" + tilesName, terraceInterval);
+			}
+		}
+		tiles[i, j].createTile("Assets" + saveLocation + "/Terrains/" + tilesName);
+	}
 }
 
