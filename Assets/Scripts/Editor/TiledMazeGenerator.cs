@@ -1279,7 +1279,7 @@ public class TiledMazeGenerator : EditorWindow
 					if (EditorUtility.DisplayCancelableProgressBar ("Loading tiles", s + " - Randomizing heights", f)) {
 						break;
 					}
-					tiles [i, j].diamondSquares ("Assets" + saveLocation + "/Terrains/" + tilesName, 0.2f);
+					tiles [i, j].diamondSquares ("Assets" + saveLocation + "/Terrains/" + tilesName, bumpiness);
 					if (smooth) {
 						if (EditorUtility.DisplayCancelableProgressBar ("Loading tiles", s + " - Smoothing heightmap", f)) {
 							break;
@@ -1323,7 +1323,7 @@ public class TiledMazeGenerator : EditorWindow
 		if (textures.Length > 0) tiles[i, j].createSplatMap(textures, baseTextureResolution, sampled, "Assets" + saveLocation + "/Terrains/" + tilesName);
 		tiles[i, j].createHeightMap(heightmapResolution, "Assets" + saveLocation + "/Terrains/" + tilesName);
 		if (randomizeHeight) {
-			tiles [i, j].diamondSquares ("Assets" + saveLocation + "/Terrains/" + tilesName, 0.2f);
+			tiles [i, j].diamondSquares ("Assets" + saveLocation + "/Terrains/" + tilesName, bumpiness);
 			if (smooth) {
 				for (int k = 0; k < smoothPass; k++) {
 					tiles [i, j].smooth ("Assets" + saveLocation + "/Terrains/" + tilesName, smoothRadius);
