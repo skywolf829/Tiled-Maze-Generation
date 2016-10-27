@@ -759,10 +759,10 @@ namespace Assets.Scripts.Editor
 		public void diamondSquares (string loc, float s){
 			terrainData = (TerrainData)AssetDatabase.LoadAssetAtPath(loc + "/" + name + ".asset", typeof(TerrainData));
 			float[,] heightmap = terrainData.GetHeights (0, 0, (int)heightmapRes, (int)heightmapRes);
-			heightmap[0, 0] = UnityEngine.Random.value;
-			heightmap[0, (int)heightmapRes - 1] = UnityEngine.Random.value;
-			heightmap[(int)heightmapRes - 1, 0] = UnityEngine.Random.value;
-			heightmap[(int)heightmapRes - 1, (int)heightmapRes - 1] = UnityEngine.Random.value;
+			heightmap[0, 0] = 0.5f;
+			heightmap[0, (int)heightmapRes - 1] = 0.5f;
+			heightmap[(int)heightmapRes - 1, 0] = 0.5f;
+			heightmap[(int)heightmapRes - 1, (int)heightmapRes - 1] = 0.5f;
 			divide(ref heightmap, (int)heightmapRes, s);
 			terrainData.SetHeights(0, 0, heightmap);
 			AssetDatabase.SaveAssets();
@@ -850,7 +850,6 @@ namespace Assets.Scripts.Editor
         }
         private float[,] square(ref float[,] hm, int x, int y, int size, float offset)
         {
-            //Debug.Log(x + " " + y + " " + size);
             float avg = (hm[x - size, y - size] + hm[x + size, y - size] + hm[x - size, y + size] + hm[x + size, y + size]) / 4.0f;
             hm[x, y] = avg + offset;
 
@@ -858,7 +857,6 @@ namespace Assets.Scripts.Editor
         }
         private float[,] diamond(ref float[,] hm, int x, int y, int size, float offset)
         {
-            //Debug.Log(x + " " + y + " " + size);
             int c = 0;
             float avg = 0;
             if(y - size >= 0)
