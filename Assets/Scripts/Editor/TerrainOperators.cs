@@ -5,6 +5,8 @@ using System.Collections.Generic;
 
 public class TerrainOperators : EditorWindow {
 
+    enum Direction { Across, Down }
+
     [MenuItem("Window/Terrain Operators")]
     public static void ShowWindow()
     {
@@ -28,14 +30,16 @@ public class TerrainOperators : EditorWindow {
     int down = 2;
     int tWidth = 2;
     int tHeight = 2;
-    int gridPixelWidth = 121;
-    int gridPixelHeight = 28;
-    Texture2D lineTex;
+    int terrainRes = 0;
+    int strength = 0;
+    int stitchWidth = 20;
+    float stitchWidthPercent = 25;
     Terrain[] terrains;
 
-    private float bumpiness = 0.2f;
+    private float bumpiness = 0.5f;
+    private float distortion = 0.02f;
     private int smoothRadius = 3;
-    private float calderasC = 0.2f;
+    private float calderasC = 0.7f;
     private bool terraceWithValues = false;
     private bool terraceWithInterval = true;
     private float terraceInterval = 0.1f;
@@ -51,25 +55,33 @@ public class TerrainOperators : EditorWindow {
 	void OnGUI () {
         scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, true);
 
+        GUILayout.BeginHorizontal(GUILayout.Width(300));
         across = EditorGUILayout.IntField("Number of terrains across:", across);
+        GUILayout.EndHorizontal();
+        GUILayout.BeginHorizontal(GUILayout.Width(300));
         down = EditorGUILayout.IntField("Number of terrains down:", down);
+        GUILayout.EndHorizontal();
+        GUILayout.BeginHorizontal();
+        GUILayout.BeginHorizontal(GUILayout.Width(300));
         if (GUILayout.Button("Apply"))
         {
             tWidth = across;
             tHeight = down;
             SetNumberOfTerrains();
         }
-
+        GUILayout.EndHorizontal();
+        GUILayout.BeginHorizontal(GUILayout.Width(300));
         if (GUILayout.Button("Autofill from scene"))
         {
             AutoFill();
         }
-
+        GUILayout.EndHorizontal();
+        GUILayout.EndHorizontal();
         GUILayout.BeginVertical();
         int counter = 0;
         for (int h = 0; h < tHeight; h++)
         {
-            GUILayout.BeginHorizontal(GUILayout.Width(400));
+            GUILayout.BeginHorizontal(GUILayout.Width(300));
             for (int w = 0; w < tWidth; w++)
             {
                 terrains[counter] = (Terrain)EditorGUILayout.ObjectField(terrains[counter], typeof(Terrain), true);
@@ -79,31 +91,68 @@ public class TerrainOperators : EditorWindow {
         }
         GUILayout.EndVertical();
 
+        GUILayout.BeginVertical();
+
+        GUILayout.BeginHorizontal();
+        GUILayout.BeginHorizontal(GUILayout.Width(300));
         bumpiness = Mathf.Clamp01(EditorGUILayout.FloatField("Bumpiness", bumpiness));
-        if(GUILayout.Button("Randomize Heights (square diamond)"))
+        GUILayout.EndHorizontal();
+        GUILayout.BeginHorizontal(GUILayout.Width(300));
+        if (GUILayout.Button("Randomize Heights (square diamond)"))
         {
             diamondSquares(bumpiness);
         }
+        GUILayout.EndHorizontal();
+        GUILayout.EndHorizontal();
 
+        GUILayout.BeginHorizontal();
+        GUILayout.BeginHorizontal(GUILayout.Width(300));
+        distortion = Mathf.Clamp01(EditorGUILayout.FloatField("Distortion", distortion));
+        GUILayout.EndHorizontal();
+        GUILayout.BeginHorizontal(GUILayout.Width(300));
+        if (GUILayout.Button("Distort current heights"))
+        {
+            distort(distortion);
+        }
+        GUILayout.EndHorizontal();
+        GUILayout.EndHorizontal();
+
+        GUILayout.BeginHorizontal();
+        GUILayout.BeginHorizontal(GUILayout.Width(300));
         smoothRadius = Mathf.Clamp(EditorGUILayout.IntField("Smooth Radius (pixels)", smoothRadius), 1, 10);
-        if(GUILayout.Button("Smooth Heights"))
+        GUILayout.EndHorizontal();
+        GUILayout.BeginHorizontal(GUILayout.Width(300));
+        if (GUILayout.Button("Smooth Heights"))
         {
             smooth(smoothRadius);
         }
+        GUILayout.EndHorizontal();
+        GUILayout.EndHorizontal();
 
+        GUILayout.BeginHorizontal();
+        GUILayout.BeginHorizontal(GUILayout.Width(150));
         terraceWithValues = EditorGUILayout.Toggle("Use values", terraceWithValues);
+        GUILayout.EndHorizontal();
         if (terraceWithValues)
             terraceWithInterval = false;
         else
             terraceWithInterval = true;
-        terraceWithInterval = EditorGUILayout.Toggle("Use interval", terraceWithInterval);
+        GUILayout.BeginHorizontal(GUILayout.Width(150));
+        terraceWithInterval = EditorGUILayout.Toggle("Use interval", terraceWithInterval);        
+        GUILayout.EndHorizontal();
         if (terraceWithInterval)
             terraceWithValues = false;
         else
             terraceWithValues = true;
+        GUILayout.EndHorizontal();
+
+        GUILayout.BeginHorizontal();
+        GUILayout.BeginHorizontal(GUILayout.Width(300));
         if (terraceWithValues)
         {
             terraceValuesString = EditorGUILayout.TextField(terraceValuesString);
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal(GUILayout.Width(300));
             if (GUILayout.Button("Terrace"))
             {
                 if (ValidatedTerraceValues())
@@ -115,17 +164,44 @@ public class TerrainOperators : EditorWindow {
                     Debug.Log("Issue with entries");
                 }
             }
+            GUILayout.EndHorizontal();
         }
         if (terraceWithInterval)
         {
             terraceInterval = Mathf.Clamp(EditorGUILayout.FloatField("Terrace interval", terraceInterval), 0.01f, 1f);
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal(GUILayout.Width(300));
             if (GUILayout.Button("Terrace"))
             {
                 terrace(terraceInterval);
             }
+            GUILayout.EndHorizontal();
         }
+        GUILayout.EndHorizontal();
 
-
+        GUILayout.BeginHorizontal();
+        GUILayout.BeginHorizontal(GUILayout.Width(300));
+        calderasC = Mathf.Clamp01(EditorGUILayout.FloatField("Caldera height inversion", calderasC));
+        GUILayout.EndHorizontal();
+        GUILayout.BeginHorizontal(GUILayout.Width(300));
+        if (GUILayout.Button("Caldera inversion"))
+        {
+            calderas(calderasC);
+        }
+        GUILayout.EndHorizontal();
+        GUILayout.EndHorizontal();
+        
+        GUILayout.BeginHorizontal(GUILayout.Width(600));
+        stitchWidthPercent = Mathf.Clamp(EditorGUILayout.FloatField("Stitch %", stitchWidthPercent), 1, 50);
+        strength = Mathf.Clamp(EditorGUILayout.IntField("Strength", strength), 0, 100);
+        GUILayout.EndHorizontal();
+        GUILayout.BeginHorizontal(GUILayout.Width(600));
+        if (GUILayout.Button("Stitch"))
+        {
+            stitchTerrains();
+        }
+        GUILayout.EndHorizontal();
+        GUILayout.EndVertical();
         GUILayout.EndScrollView();
     }
     private bool ValidatedTerraceValues()
@@ -233,6 +309,23 @@ public class TerrainOperators : EditorWindow {
 		return pos1 >= pos2 - 1.0 && pos1 <= pos2 + 1.0;
 	}
 
+    public void distort(float s)
+    {
+        for (int t = 0; t < terrains.Length; t++)
+        {
+            TerrainData terrainData = terrains[t].terrainData;
+            int heightmapRes = terrainData.heightmapResolution;
+            float[,] heightmap = terrainData.GetHeights(0, 0, heightmapRes, heightmapRes);
+            for (int y = 0; y < heightmapRes; y++)
+            {
+                for(int x = 0; x < heightmapRes; x++)
+                {
+                    heightmap[y, x] += s * (Random.value * 2 - 1);
+                }
+            }
+            terrainData.SetHeights(0, 0, heightmap);
+        }
+    }
     public void diamondSquares(float s)
     {
         for (int t = 0; t < terrains.Length; t++)
@@ -240,10 +333,13 @@ public class TerrainOperators : EditorWindow {
             TerrainData terrainData = terrains[t].terrainData;
             int heightmapRes = terrainData.heightmapResolution;
             float[,] heightmap = terrainData.GetHeights(0, 0, (int)heightmapRes, (int)heightmapRes);
-            heightmap[0, 0] = 0.5f;
-            heightmap[0, (int)heightmapRes - 1] = 0.5f;
-            heightmap[(int)heightmapRes - 1, 0] = 0.5f;
-            heightmap[(int)heightmapRes - 1, (int)heightmapRes - 1] = 0.5f;
+            for(int y = 0; y < heightmapRes; y++)
+            {
+                for(int x = 0; x < heightmapRes; x++)
+                {
+                    heightmap[y, x] = 0.5f;
+                }
+            }
             divide(ref heightmap, (int)heightmapRes, s / 2, heightmapRes);
             terrainData.SetHeights(0, 0, heightmap);
         }
@@ -337,8 +433,8 @@ public class TerrainOperators : EditorWindow {
     {
         int x, y, half = size / 2;
         float scale = (size / (float)heightmapRes) * s;
-        if (half < 1) return;
 
+        if (half < 1) return;
         for (y = half; y < heightmapRes - 1; y += size)
         {
             for (x = half; x < heightmapRes - 1; x += size)
@@ -357,9 +453,8 @@ public class TerrainOperators : EditorWindow {
     }
     private float[,] square(ref float[,] hm, int x, int y, int size, float offset, int heightmapRes)
     {
-        float avg = (hm[x - size, y - size] + hm[x + size, y - size] + hm[x - size, y + size] + hm[x + size, y + size]) / 4.0f;
-        hm[x, y] = avg + offset;
-
+        float avg = (hm[y - size, x - size] + hm[y + size, x - size] + hm[y - size, x + size] + hm[y + size, x + size]) / 4.0f;
+        hm[y, x] = avg + offset;
         return hm;
     }
     private float[,] diamond(ref float[,] hm, int x, int y, int size, float offset, int heightmapRes)
@@ -368,26 +463,26 @@ public class TerrainOperators : EditorWindow {
         float avg = 0;
         if (y - size >= 0)
         {
-            avg += hm[x, y - size];
+            avg += hm[y - size, x];
             c++;
         }
         if (y + size < heightmapRes)
         {
-            avg += hm[x, y + size];
+            avg += hm[y + size, x];
             c++;
         }
         if (x - size >= 0)
         {
-            avg += hm[x - size, y];
+            avg += hm[y, x - size];
             c++;
         }
         if (x + size < heightmapRes)
         {
-            avg += hm[x + size, y];
+            avg += hm[y, x + size];
             c++;
         }
-        avg /= 4.0f;
-        hm[x, y] = avg + offset;
+        avg /= c;
+        hm[y, x] = avg + offset;
 
         return hm;
     }
@@ -437,5 +532,151 @@ public class TerrainOperators : EditorWindow {
             }
         }
         return blur;
+    }
+    private void stitchTerrains()
+    {
+        foreach (Terrain t in terrains)
+        {
+            if (t == null)
+            {
+                Debug.Log("All terrain slots must have a terrain assigned");
+                return;
+            }
+        }
+        terrainRes = terrains[0].terrainData.heightmapWidth;
+        if (terrains[0].terrainData.heightmapHeight != terrainRes)
+        {
+            Debug.Log("Heightmap width and height must be the same");
+            return;
+        }
+
+        foreach (Terrain t in terrains)
+        {
+            if (t.terrainData.heightmapWidth != terrainRes || t.terrainData.heightmapHeight != terrainRes)
+            {
+                Debug.Log("All heightmaps must be the same resolution");
+                return;
+            }
+        }      
+
+        stitchWidth = (int)Mathf.Clamp(terrainRes * stitchWidthPercent, 2, (terrainRes - 1) / 2);
+        var counter = 0;
+        var total = tHeight * (tWidth - 1) + (tHeight - 1) * tWidth;
+
+        if (tWidth == 1 && tHeight == 1)
+        {
+            blendData(terrains[0].terrainData, terrains[0].terrainData, Direction.Across, true);
+            blendData(terrains[0].terrainData, terrains[0].terrainData, Direction.Down, true);
+            Debug.Log("Terrain has been made repeatable with itself");
+        }
+        else
+        {
+            for (int h = 0; h < tHeight; h++)
+            {
+                for (int w = 0; w < tWidth - 1; w++)
+                {
+                    EditorUtility.DisplayProgressBar("Stitching...", "", Mathf.InverseLerp(0, total, ++counter));
+                    blendData(terrains[h * tWidth + w].terrainData, terrains[h * tWidth + w + 1].terrainData, Direction.Across, false);
+                }
+            }
+            for (int h = 0; h < tHeight - 1; h++)
+            {
+                for (int w = 0; w < tWidth; w++)
+                {
+                    EditorUtility.DisplayProgressBar("Stitching...", "", Mathf.InverseLerp(0, total, ++counter));
+                    blendData(terrains[h * tWidth + w].terrainData, terrains[(h + 1) * tWidth + w].terrainData, Direction.Down, false);
+                }
+            }
+            Debug.Log("Terrains stitched successfully");
+        }
+
+        EditorUtility.ClearProgressBar();
+    }
+    private void blendData(TerrainData terrain1, TerrainData terrain2, Direction thisDirection, bool singleTerrain)
+    {
+        float[,] heightmapData = terrain1.GetHeights(0, 0, terrainRes, terrainRes);
+        float[,] heightmapData2 = terrain2.GetHeights(0, 0, terrainRes, terrainRes);
+        int width = terrainRes - 1;
+
+        if (thisDirection == Direction.Across)
+        {
+            for (int i = 0; i < terrainRes; i++)
+            {
+                float midpoint = (heightmapData[i, width] + heightmapData2[i, 0]) * .5f;
+                for (int j = 1; j < stitchWidth; j++)
+                {
+                    float mix = Mathf.Lerp(heightmapData[i, width - j], heightmapData2[i, j], .5f);
+                    if (j == 1)
+                    {
+                        heightmapData[i, width] = Mathf.Lerp(mix, midpoint, strength);
+                        heightmapData2[i, 0] = Mathf.Lerp(mix, midpoint, strength);
+                    }
+                    float t = Mathf.SmoothStep(0.0f, 1.0f, Mathf.InverseLerp(1, stitchWidth - 1, j));
+                    float mixdata = Mathf.Lerp(mix, heightmapData[i, width - j], t);
+                    heightmapData[i, width - j] = Mathf.Lerp(mixdata, Mathf.Lerp(midpoint, heightmapData[i, width - j], t), strength);
+
+                    mixdata = Mathf.Lerp(mix, heightmapData2[i, j], t);
+                    float blend = Mathf.Lerp(mixdata, Mathf.Lerp(midpoint, heightmapData2[i, j], t), strength);
+                    if (!singleTerrain)
+                    {
+                        heightmapData2[i, j] = blend;
+                    }
+                    else
+                    {
+                        heightmapData[i, j] = blend;
+                    }
+                }
+            }
+            if (singleTerrain)
+            {
+                for (int i = 0; i < terrainRes; i++)
+                {
+                    heightmapData[i, 0] = heightmapData[i, width];
+                }
+            }
+        }
+        else
+        {
+            for (int i = 0; i < terrainRes; i++)
+            {
+                float midpoint = (heightmapData2[width, i] + heightmapData[0, i]) * .5f;
+                for (int j = 1; j < stitchWidth; j++)
+                {
+                    float mix = Mathf.Lerp(heightmapData2[width - j, i], heightmapData[j, i], .5f);
+                    if (j == 1)
+                    {
+                        heightmapData2[width, i] = Mathf.Lerp(mix, midpoint, strength);
+                        heightmapData[0, i] = Mathf.Lerp(mix, midpoint, strength);
+                    }
+                    float t = Mathf.SmoothStep(0.0f, 1.0f, Mathf.InverseLerp(1, stitchWidth - 1, j));
+                    float mixdata = Mathf.Lerp(mix, heightmapData[j, i], t);
+                    heightmapData[j, i] = Mathf.Lerp(mixdata, Mathf.Lerp(midpoint, heightmapData[j, i], t), strength);
+
+                    mixdata = Mathf.Lerp(mix, heightmapData2[width - j, i], t);
+                    float blend = Mathf.Lerp(mixdata, Mathf.Lerp(midpoint, heightmapData2[width - j, i], t), strength);
+                    if (!singleTerrain)
+                    {
+                        heightmapData2[width - j, i] = blend;
+                    }
+                    else
+                    {
+                        heightmapData[width - j, i] = blend;
+                    }
+                }
+            }
+            if (singleTerrain)
+            {
+                for (int i = 0; i < terrainRes; i++)
+                {
+                    heightmapData[width, i] = heightmapData[0, i];
+                }
+            }
+        }
+
+        terrain1.SetHeights(0, 0, heightmapData);
+        if (!singleTerrain)
+        {
+            terrain2.SetHeights(0, 0, heightmapData2);
+        }
     }
 }
