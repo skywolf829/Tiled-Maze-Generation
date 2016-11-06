@@ -1180,8 +1180,8 @@ public class TiledMazeGenerator : EditorWindow
     }
     public void TileOptions()
     {
-        tileWidth = Mathf.Clamp(EditorGUILayout.FloatField("Tile width(m)", tileWidth), 1, 100);
-        tileHeight = Mathf.Clamp(EditorGUILayout.FloatField("Tile height(m)", tileHeight), 1, 100);
+        tileWidth = Mathf.Clamp(EditorGUILayout.FloatField("Tile width(m)", tileWidth), 1, 1000);
+        tileHeight = Mathf.Clamp(EditorGUILayout.FloatField("Tile height(m)", tileHeight), 1, 1000);
         tileDepth = Mathf.Clamp(EditorGUILayout.FloatField("Tile depth(m)", tileDepth), 1, 1000);
     }
     public void TextureArea()

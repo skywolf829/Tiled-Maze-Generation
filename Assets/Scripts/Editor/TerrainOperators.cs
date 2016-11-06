@@ -36,15 +36,18 @@ public class TerrainOperators : EditorWindow {
     float stitchWidthPercent = 25;
     Terrain[] terrains;
 
+	Terrain terrainToMountainize;
     private float bumpiness = 0.5f;
     private float distortion = 0.02f;
     private int smoothRadius = 3;
     private float calderasC = 0.7f;
+	private float mountainBumpiness = 0.2f;
     private bool terraceWithValues = false;
     private bool terraceWithInterval = true;
     private float terraceInterval = 0.1f;
     private string terraceValuesString = "0 0.25 0.5 0.75 1";
     private List<float> terraceValues = new List<float>();
+	private int selectedTerrain = 0;
 
     // Use this for initialization
     void OnEnable () {
@@ -104,6 +107,19 @@ public class TerrainOperators : EditorWindow {
         }
         GUILayout.EndHorizontal();
         GUILayout.EndHorizontal();
+
+		GUILayout.BeginHorizontal();
+		GUILayout.BeginHorizontal(GUILayout.Width(300));
+		mountainBumpiness = Mathf.Clamp01(EditorGUILayout.FloatField("Mountain bumpiness", mountainBumpiness));
+		terrainToMountainize = (Terrain)EditorGUILayout.ObjectField(terrainToMountainize, typeof(Terrain), true);
+		GUILayout.EndHorizontal();
+		GUILayout.BeginHorizontal(GUILayout.Width(300));
+		if (GUILayout.Button("Mountainize"))
+		{
+			mountainize(terrainToMountainize, mountainBumpiness);
+		}
+		GUILayout.EndHorizontal();
+		GUILayout.EndHorizontal();
 
         GUILayout.BeginHorizontal();
         GUILayout.BeginHorizontal(GUILayout.Width(300));
@@ -326,20 +342,35 @@ public class TerrainOperators : EditorWindow {
             terrainData.SetHeights(0, 0, heightmap);
         }
     }
+	public void mountainize(Terrain t, float s){
+		
+		TerrainData terrainData = t.terrainData;
+		int heightmapRes = terrainData.heightmapResolution;
+		float[,] heightmap = new float[heightmapRes, heightmapRes];		
+		heightmap[0, 0] = s * Random.value;   
+		heightmap[heightmapRes - 1, 0] = s * Random.value;
+		heightmap[0, heightmapRes - 1] = s * Random.value;
+		heightmap[heightmapRes - 1, heightmapRes - 1] = s * Random.value;
+		divide(ref heightmap, (int)heightmapRes, s / 2, heightmapRes);
+		for (int y = 0; y < heightmapRes; y++) {
+			for (int x = 0; x < heightmapRes; x++) {
+				heightmap [y, x] = heightmap [y, x] * 0.2f + 0.8f;
+			}
+		}
+		terrainData.SetHeights(0, 0, heightmap);
+
+	}
     public void diamondSquares(float s)
     {
         for (int t = 0; t < terrains.Length; t++)
         {
             TerrainData terrainData = terrains[t].terrainData;
             int heightmapRes = terrainData.heightmapResolution;
-            float[,] heightmap = terrainData.GetHeights(0, 0, (int)heightmapRes, (int)heightmapRes);
-            for(int y = 0; y < heightmapRes; y++)
-            {
-                for(int x = 0; x < heightmapRes; x++)
-                {
-                    heightmap[y, x] = 0.5f;
-                }
-            }
+			float[,] heightmap = new float[heightmapRes, heightmapRes];
+			heightmap[0, 0] = s * Random.value;   
+			heightmap[heightmapRes - 1, 0] = s * Random.value;
+			heightmap[0, heightmapRes - 1] = s * Random.value;
+			heightmap[heightmapRes - 1, heightmapRes - 1] = s * Random.value;
             divide(ref heightmap, (int)heightmapRes, s / 2, heightmapRes);
             terrainData.SetHeights(0, 0, heightmap);
         }
@@ -481,7 +512,7 @@ public class TerrainOperators : EditorWindow {
             avg += hm[y, x + size];
             c++;
         }
-        avg /= c;
+		avg /= (float)c;
         hm[y, x] = avg + offset;
 
         return hm;
