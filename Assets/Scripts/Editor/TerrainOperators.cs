@@ -116,7 +116,7 @@ public class TerrainOperators : EditorWindow {
 		GUILayout.BeginHorizontal(GUILayout.Width(300));
 		if (GUILayout.Button("Mountainize"))
 		{
-			mountainize(terrainToMountainize, mountainBumpiness);
+			mountainize3(terrainToMountainize, mountainBumpiness);
 		}
 		GUILayout.EndHorizontal();
 		GUILayout.EndHorizontal();
@@ -360,6 +360,7 @@ public class TerrainOperators : EditorWindow {
 		terrainData.SetHeights(0, 0, heightmap);
 
 	}
+
     public void diamondSquares(float s)
     {
         for (int t = 0; t < terrains.Length; t++)
@@ -374,6 +375,92 @@ public class TerrainOperators : EditorWindow {
             divide(ref heightmap, (int)heightmapRes, s / 2, heightmapRes);
             terrainData.SetHeights(0, 0, heightmap);
         }
+    }
+    public void mountainize2(Terrain t, float s)
+    {
+        TerrainData terrainData = t.terrainData;
+        int heightmapRes = terrainData.heightmapResolution;
+        float[,] heightmap = new float[heightmapRes, heightmapRes];
+
+        heightmap[0, 0] = s * Random.value;
+        heightmap[heightmapRes - 1, 0] = s * Random.value;
+        heightmap[0, heightmapRes - 1] = s * Random.value;
+        heightmap[heightmapRes - 1, heightmapRes - 1] = s * Random.value;
+
+        heightmap[heightmapRes / 2, heightmapRes / 2] = 0.9f;
+
+        heightmap[heightmapRes / 2, 0] = s * Random.value;
+        heightmap[heightmapRes / 2, heightmapRes - 1] = s * Random.value;
+        heightmap[0, heightmapRes / 2] = s * Random.value;
+        heightmap[heightmapRes - 1, heightmapRes / 2] = s * Random.value;
+
+        divide(ref heightmap, (int)heightmapRes / 2, s / 2, heightmapRes);
+        terrainData.SetHeights(0, 0, heightmap);
+    }
+    public void mountainize3(Terrain t, float s)
+    {
+        TerrainData terrainData = t.terrainData;
+        int heightmapRes = terrainData.heightmapResolution;
+        float[,] heightmap = new float[heightmapRes, heightmapRes];
+        float[,] heightmap2 = new float[heightmapRes, heightmapRes];
+
+        int half = heightmapRes / 2;
+
+        while (half > 0)
+        {
+            for (int i = half; i < heightmapRes; i += 2 * half)
+            {
+                for (int j = 0; j < heightmapRes; j++)
+                {
+                    if(i == heightmapRes / 2)
+                    {
+                        heightmap[i, j] = 1;
+                    }
+                    else
+                    {
+                        float mid = (heightmap[i + half, j] + heightmap[i - half, j]) / 2.0f;
+                        heightmap[i, j] = mid + (heightmap[i + half, j] - heightmap[i - half, j]) * 2 * (0.5f - Random.value) * s;
+                    }                                    
+                }                
+            }
+            
+            for (int i = half; i < heightmapRes; i += 2 * half)
+            {
+                for (int j = 0; j < heightmapRes; j++)
+                {
+                    if (i == heightmapRes / 2)
+                    {
+                        heightmap2[j, i] = 1;
+                    }
+                    else
+                    {
+                        float mid = (heightmap2[j, i + half] + heightmap2[j, i - half]) / 2.0f;
+                            heightmap2[j, i] = mid + (heightmap2[j, i + half] - heightmap2[j, i - half]) * 2 * (0.5f - Random.value) * s;
+                    }
+                }
+            }           
+            half /= 2;
+        }
+        for (int i = 0; i < heightmapRes; i++)
+        {
+            for (int j = 0; j < heightmapRes; j++)
+            {
+                if (heightmap[i, j] > heightmap2[i, j])
+                {
+                    heightmap[i, j] = heightmap2[i, j];
+                }
+            }
+        }
+        terrainData.SetHeights(0, 0, heightmap);
+        smooth(t, 3);
+    }
+    public void smooth(Terrain t, int radius)
+    {
+        TerrainData terrainData = t.terrainData;
+        int heightmapRes = terrainData.heightmapResolution;
+        float[,] heightmap = terrainData.GetHeights(0, 0, (int)heightmapRes, (int)heightmapRes);
+        heightmap = gaussBlur(heightmap, (int)heightmapRes, (int)heightmapRes, radius);
+        terrainData.SetHeights(0, 0, heightmap);
     }
     public void smooth(int radius)
     {
