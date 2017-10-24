@@ -72,7 +72,7 @@ public class TiledMazeGenerator : EditorWindow
 
     private int selectedRow, selectedColumn;
     private Texture2D[,] displayTextures = new Texture2D[4, 4];
-    private Texture2D[] textures = new Texture2D[1];
+    private Texture2D[] textures = new Texture2D[2];
     private Tile[,] tiles = new Tile[4, 4];
     private int[,] tiling = new int[4, 4];
     private string[,] tilingFiles = new string[4, 4];
